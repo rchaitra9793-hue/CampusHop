@@ -1,0 +1,4396 @@
+/* =========================================================
+   CAMPUSHOP — GLOBAL APP
+   ========================================================= */
+
+#root {
+  min-height: 100vh;
+}
+
+/* =========================================================
+   SHARED
+   ========================================================= */
+
+.eyebrow {
+  display: block;
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+button {
+  border: 0;
+}
+
+.primary-button,
+.secondary-button {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 12px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 800;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.primary-button {
+  color: var(--ink);
+  background: var(--coral);
+  box-shadow: 0 5px 0 #d86f83;
+}
+
+.primary-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #d86f83;
+}
+
+.secondary-button {
+  justify-content: center;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.secondary-button:hover {
+  background: var(--paper);
+}
+
+/* =========================================================
+   AUTH
+   ========================================================= */
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  background: var(--blush);
+}
+
+.auth-brand {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  padding: 58px 8vw 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    radial-gradient(
+      circle at 80% 18%,
+      rgba(255, 209, 102, 0.35),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 15% 80%,
+      rgba(143, 168, 118, 0.25),
+      transparent 25%
+    ),
+    var(--blush);
+}
+
+.auth-brand::before {
+  content: "";
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  right: -280px;
+  bottom: -250px;
+  border: 1px dashed rgba(43, 38, 34, 0.18);
+  border-radius: 50%;
+}
+
+.auth-brand::after {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  right: -150px;
+  bottom: -160px;
+  border: 1px dashed rgba(43, 38, 34, 0.13);
+  border-radius: 50%;
+}
+
+.brand-mark,
+.logo-symbol {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 10px 12px 9px 11px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  transform: rotate(-4deg);
+}
+
+.auth-brand h1 {
+  max-width: 600px;
+  margin: 18px 0 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(60px, 7vw, 108px);
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  font-weight: 600;
+}
+
+.auth-brand h1 em,
+.welcome-row h1 em {
+  color: var(--coral-dark);
+  font-style: normal;
+}
+
+.auth-note {
+  position: relative;
+  width: min(390px, 80%);
+  padding: 28px;
+  background: var(--butter);
+  transform: rotate(-2deg);
+  box-shadow: 4px 5px 0 rgba(43, 38, 34, 0.1);
+}
+
+.note-tape {
+  position: absolute;
+  width: 105px;
+  height: 26px;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.auth-note p {
+  margin: 0 0 22px;
+  font-family: "Fraunces", serif;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.auth-note span:last-child {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-panel {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 60px;
+  background: #fffaf7;
+  border-left: 1px solid var(--line);
+}
+
+.auth-inner {
+  width: min(430px, 100%);
+}
+
+.mobile-brand {
+  display: none;
+}
+
+.auth-heading {
+  margin-bottom: 34px;
+}
+
+.auth-heading h2 {
+  margin: 10px 0 8px;
+  font-family: "Fraunces", serif;
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.auth-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.form-error {
+  color: #c0392b;
+  background: #fceceb;
+  border: 1px solid #e6a29a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+}
+
+.auth-form > label,
+.input-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.auth-form input:not([type="checkbox"]) {
+  width: 100%;
+  height: 52px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  color: var(--ink);
+  background: var(--blush);
+  transition:
+    border 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.auth-form input:not([type="checkbox"]):focus {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 4px rgba(255, 143, 163, 0.14);
+}
+
+.auth-form input::placeholder {
+  color: #aaa099;
+}
+
+.form-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: -4px;
+}
+
+.checkbox-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.checkbox-label input {
+  accent-color: var(--coral);
+}
+
+.text-button {
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  font-size: 11px;
+}
+
+.text-button:hover {
+  color: var(--ink);
+}
+
+.auth-divider {
+  position: relative;
+  margin: 27px 0 17px;
+  text-align: center;
+}
+
+.auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+}
+
+.auth-divider span {
+  position: relative;
+  padding: 0 12px;
+  color: var(--muted);
+  background: #fffaf7;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.auth-footer {
+  margin: 18px 0 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.back-button {
+  margin-bottom: 35px;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.back-button:hover {
+  color: var(--ink);
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.role-option {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--blush);
+  color: var(--ink);
+  text-align: left;
+  transition: 150ms ease;
+}
+
+.role-option:hover {
+  transform: translateY(-1px);
+}
+
+.role-option.selected {
+  border-color: var(--coral);
+  background: rgba(255, 143, 163, 0.1);
+  box-shadow: inset 0 0 0 1px var(--coral);
+}
+
+.role-icon {
+  margin-bottom: 3px;
+  font-size: 20px;
+}
+
+.role-option strong {
+  font-size: 12px;
+}
+
+.role-option small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.verification-note {
+  margin: 22px 0 0;
+  padding: 13px 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 10px;
+  background: var(--sage-light);
+  color: #526344;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.verification-note span {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.sticker {
+  position: absolute;
+  z-index: 2;
+  padding: 15px 19px;
+  font-family: "Fraunces", serif;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: 3px 4px 0 rgba(43, 38, 34, 0.1);
+}
+
+.sticker span {
+  display: block;
+  margin-bottom: 5px;
+  font-family: "Space Mono", monospace;
+  font-size: 8px;
+}
+
+.sticker-yellow {
+  top: 40%;
+  right: 15%;
+  background: var(--butter);
+  transform: rotate(5deg);
+}
+
+.sticker-sage {
+  bottom: 13%;
+  right: 28%;
+  background: var(--sage);
+  color: white;
+  transform: rotate(-6deg);
+}
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+.dashboard {
+  min-height: 100vh;
+  background: var(--blush);
+}
+
+.topbar {
+  height: 82px;
+  padding: 0 5vw;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  background: rgba(253, 246, 240, 0.94);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-family: "Fraunces", serif;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.logo-symbol {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  font-size: 9px;
+}
+
+.main-nav {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  gap: 32px;
+}
+
+.main-nav button {
+  position: relative;
+  height: 100%;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.main-nav button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: transparent;
+}
+
+.main-nav button.active {
+  color: var(--ink);
+}
+
+.main-nav button.active::after {
+  background: var(--coral);
+}
+
+.profile-menu {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.mini-avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lavender);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.profile-menu > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-menu strong {
+  font-size: 10px;
+}
+
+.profile-menu span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.logout-button {
+  margin-left: 8px;
+  color: var(--muted);
+  background: none;
+  font-size: 18px;
+}
+
+.dashboard-content {
+  width: min(1280px, 90%);
+  margin: 0 auto;
+  padding: 68px 0 100px;
+}
+
+.welcome-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.welcome-row h1 {
+  margin: 13px 0 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(46px, 5vw, 70px);
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  font-weight: 600;
+}
+
+.campus-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sage);
+  box-shadow: 0 0 0 4px var(--sage-light);
+}
+
+.campus-status div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.campus-status strong {
+  font-size: 10px;
+}
+
+.campus-status span:last-child {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+/* =========================================================
+   COMMUTE PANEL
+   ========================================================= */
+
+.commute-panel {
+  position: relative;
+  margin-top: 52px;
+  padding: 31px;
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  align-items: center;
+  gap: 45px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.commute-panel::before {
+  content: "";
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  top: -160px;
+  right: -50px;
+  border-radius: 50%;
+  background: var(--butter-light);
+}
+
+.commute-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.commute-copy h2 {
+  margin: 9px 0 6px;
+  font-family: "Fraunces", serif;
+  font-size: 29px;
+  letter-spacing: -0.03em;
+}
+
+.commute-copy p {
+  max-width: 350px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.commute-form {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 25px 1fr 0.8fr auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.location-input,
+.time-input {
+  min-height: 60px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--blush);
+}
+
+.location-input > div,
+.time-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.location-input small,
+.time-input small {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.location-input strong,
+.time-input strong {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.location-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+}
+
+.pickup-dot {
+  background: var(--coral);
+}
+
+.campus-dot {
+  background: var(--sage);
+}
+
+.location-arrow {
+  color: var(--muted);
+  text-align: center;
+}
+
+.find-button,
+.request-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.find-button {
+  min-height: 60px;
+  padding: 0 17px;
+  color: var(--ink);
+  background: var(--coral);
+  box-shadow: 0 3px 0 #d86f83;
+}
+
+/* =========================================================
+   MATCHES
+   ========================================================= */
+
+.matches-header {
+  margin-top: 70px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.matches-header h2 {
+  margin: 10px 0 0;
+  font-family: "Fraunces", serif;
+  font-size: 36px;
+  letter-spacing: -0.04em;
+}
+
+.match-explanation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.tiny-score {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--butter);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  transform: rotate(7deg);
+}
+
+.ride-board {
+  position: relative;
+  min-height: 500px;
+  margin-top: 42px;
+  padding: 60px 35px 50px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  border-radius: 5px;
+  background:
+    radial-gradient(circle, rgba(43, 38, 34, 0.08) 1px, transparent 1px),
+    #c9aa82;
+  background-size: 15px 15px;
+  box-shadow:
+    inset 0 0 0 8px rgba(105, 78, 49, 0.09),
+    0 12px 30px rgba(43, 38, 34, 0.12);
+}
+
+.board-scribble {
+  position: absolute;
+  top: 12px;
+  left: 30px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #5e4730;
+  font-family: "Fraunces", serif;
+  font-size: 18px;
+  transform: rotate(-3deg);
+}
+
+.board-scribble div {
+  font-size: 22px;
+  transform: rotate(25deg);
+}
+
+/* =========================================================
+   RIDE CARD
+   ========================================================= */
+
+.ride-card {
+  position: relative;
+  min-width: 0;
+  padding: 28px 23px 22px;
+  background: #fffdf9;
+  box-shadow:
+    2px 5px 0 rgba(43, 38, 34, 0.08),
+    0 12px 25px rgba(43, 38, 34, 0.12);
+  transform: rotate(var(--rotation));
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.ride-card:hover {
+  transform: rotate(0deg) translateY(-7px);
+  box-shadow:
+    4px 10px 0 rgba(43, 38, 34, 0.08),
+    0 20px 35px rgba(43, 38, 34, 0.15);
+  z-index: 5;
+}
+
+.ride-card::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 88px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-1deg);
+  background: rgba(255, 255, 255, 0.53);
+}
+
+.washi-tape {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 85px;
+  height: 18px;
+  transform: translateX(-50%) rotate(-1deg);
+  opacity: 0.6;
+}
+
+.ride-card--coral .washi-tape {
+  background: var(--coral);
+}
+
+.ride-card--sage .washi-tape {
+  background: var(--sage);
+}
+
+.ride-card--lavender .washi-tape {
+  background: var(--lavender);
+}
+
+.score-sticker {
+  position: absolute;
+  top: -19px;
+  right: -17px;
+  z-index: 5;
+  width: 76px;
+  height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(43, 38, 34, 0.55);
+  border-radius: 50%;
+  background: var(--butter);
+  transform: rotate(8deg);
+  box-shadow: 2px 3px 0 rgba(43, 38, 34, 0.12);
+}
+
+.score-sticker strong {
+  font-family: "Space Mono", monospace;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.score-sticker span {
+  margin-top: 4px;
+  font-family: "Fraunces", serif;
+  font-size: 11px;
+}
+
+.ride-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lavender-light);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ride-card--sage .avatar {
+  background: var(--sage-light);
+}
+
+.ride-card--coral .avatar {
+  background: rgba(255, 143, 163, 0.17);
+}
+
+.rider-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rider-info strong {
+  font-family: "Fraunces", serif;
+  font-size: 17px;
+}
+
+.rider-info span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.more-button {
+  margin-left: auto;
+  padding: 5px;
+  color: var(--muted);
+  background: none;
+  font-size: 10px;
+}
+
+.route-sketch {
+  position: relative;
+  height: 145px;
+  margin: 12px 0 0;
+}
+
+.route-sketch--compact {
+  height: 112px;
+}
+
+.route-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.route-path {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 7 6;
+}
+
+.route-point {
+  stroke: #fffdf9;
+  stroke-width: 3;
+}
+
+.route-point--start {
+  fill: var(--coral);
+}
+
+.route-point--end {
+  fill: var(--sage);
+}
+
+.route-doodle {
+  fill: none;
+  stroke: rgba(43, 38, 34, 0.25);
+  stroke-width: 1.5;
+}
+
+.route-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.route-label span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.route-label strong {
+  max-width: 100px;
+  font-family: "Fraunces", serif;
+  font-size: 12px;
+}
+
+.route-label--start {
+  left: 0;
+  bottom: 7px;
+}
+
+.route-label--end {
+  right: 0;
+  top: 5px;
+  text-align: right;
+  align-items: flex-end;
+}
+
+.ride-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 13px 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+}
+
+.ride-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ride-meta > div:not(:first-child) {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.ride-meta span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+}
+
+.ride-meta strong {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+}
+
+.request-button {
+  width: 100%;
+  margin-top: 15px;
+  min-height: 42px;
+  padding: 0 13px;
+  color: var(--ink);
+  background: var(--blush);
+}
+
+.ride-card--coral .request-button {
+  background: rgba(255, 143, 163, 0.15);
+}
+
+.ride-card--sage .request-button {
+  background: var(--sage-light);
+}
+
+.ride-card--lavender .request-button {
+  background: var(--lavender-light);
+}
+
+.request-button:hover {
+  filter: brightness(0.97);
+}
+
+/* =========================================================
+   SCORE BREAKDOWN
+   ========================================================= */
+
+.score-breakdown {
+  margin-top: 75px;
+  padding: 42px;
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 60px;
+  align-items: center;
+  border-radius: 18px;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.score-breakdown .eyebrow {
+  color: #aaa099;
+}
+
+.score-breakdown h2 {
+  margin: 10px 0 8px;
+  font-family: "Fraunces", serif;
+  font-size: 34px;
+}
+
+.score-breakdown p {
+  max-width: 400px;
+  margin: 0;
+  color: #b8aea7;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.score-factors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.score-factors > div {
+  min-height: 100px;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+}
+
+.score-factors strong {
+  font-family: "Space Mono", monospace;
+  font-size: 19px;
+}
+
+.score-factors span {
+  color: #aaa099;
+  font-size: 9px;
+}
+
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(43, 38, 34, 0.45);
+  backdrop-filter: blur(5px);
+}
+
+.request-modal {
+  position: relative;
+  width: min(430px, 100%);
+  padding: 42px 35px 35px;
+  background: var(--paper);
+  box-shadow: 8px 10px 0 rgba(43, 38, 34, 0.15);
+  transform: rotate(-1deg);
+}
+
+.modal-sticker {
+  position: absolute;
+  top: -24px;
+  right: 25px;
+  padding: 13px 17px;
+  background: var(--butter);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  transform: rotate(7deg);
+}
+
+.request-modal h2 {
+  margin: 11px 0;
+  font-family: "Fraunces", serif;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.request-modal p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .auth-page {
+    grid-template-columns: 0.85fr 1.15fr;
+  }
+
+  .auth-brand {
+    padding-left: 5vw;
+    padding-right: 5vw;
+  }
+
+  .commute-panel {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+
+  .ride-board {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .score-breakdown {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  .auth-page {
+    display: block;
+  }
+
+  .auth-brand {
+    min-height: 270px;
+    padding: 30px 25px;
+  }
+
+  .auth-brand h1 {
+    font-size: 52px;
+  }
+
+  .auth-brand .brand-mark {
+    margin-bottom: 35px;
+  }
+
+  .auth-note,
+  .sticker {
+    display: none;
+  }
+
+  .auth-panel {
+    min-height: calc(100vh - 270px);
+    padding: 40px 25px 60px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .mobile-brand {
+    display: none;
+  }
+
+  .topbar {
+    height: auto;
+    min-height: 70px;
+    padding: 12px 20px;
+  }
+
+  .main-nav {
+    display: none;
+  }
+
+  .dashboard-content {
+    width: calc(100% - 32px);
+    padding-top: 45px;
+  }
+
+  .welcome-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .campus-status {
+    align-self: flex-start;
+  }
+
+  .commute-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .location-arrow {
+    display: none;
+  }
+
+  .time-input {
+    grid-column: span 1;
+  }
+
+  .find-button {
+    grid-column: span 1;
+  }
+
+  .ride-board {
+    grid-template-columns: 1fr;
+    padding: 55px 25px 35px;
+  }
+
+  .ride-card {
+    max-width: 420px;
+    width: 100%;
+    margin: auto;
+  }
+
+  .matches-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .score-breakdown {
+    padding: 30px 24px;
+  }
+
+  .score-factors {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .auth-brand h1 {
+    font-size: 44px;
+  }
+
+  .auth-heading h2 {
+    font-size: 35px;
+  }
+
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-menu > div:nth-child(2) {
+    display: none;
+  }
+
+  .logo {
+    font-size: 18px;
+  }
+
+  .welcome-row h1 {
+    font-size: 45px;
+  }
+
+  .commute-panel {
+    padding: 22px;
+  }
+
+  .commute-form {
+    grid-template-columns: 1fr;
+  }
+
+  .time-input,
+  .find-button {
+    grid-column: auto;
+  }
+
+  .matches-header h2 {
+    font-size: 30px;
+  }
+
+  .ride-board {
+    margin-left: -8px;
+    margin-right: -8px;
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .score-factors {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.campushop-logo {
+  width: 150px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+.auth-brand .campushop-logo {
+  width: 260px;
+  max-width: 100%;
+}
+.auth-brand .campushop-logo {
+  width: 240px;
+  height: auto;
+  display: block;
+  margin-bottom: 20px;
+}
+/* =========================================================
+   NEW CAMPUSHOP PAGES
+   FIND RIDE / OFFER RIDE / MY TRIPS
+   ========================================================= */
+
+.page-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 20px 0 80px;
+}
+
+.page-heading {
+  position: relative;
+  padding: 55px 0 35px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.page-heading::after {
+  content: "";
+  position: absolute;
+  right: -20px;
+  top: 10px;
+  width: 190px;
+  height: 190px;
+  border: 1px dashed rgba(43, 38, 34, 0.13);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.page-heading h1 {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  margin: 12px 0 15px;
+  font-family: "Fraunces", serif;
+  font-size: clamp(52px, 6vw, 78px);
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  font-weight: 600;
+}
+
+.page-heading h1 em {
+  color: var(--coral-dark);
+  font-style: normal;
+}
+
+.page-heading p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+
+/* =========================================================
+   FIND RIDE
+   ========================================================= */
+
+.search-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr 0.8fr auto;
+  align-items: center;
+  gap: 0;
+  margin-top: 18px;
+  padding: 10px;
+  background: #fffdf9;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 8px 25px rgba(43, 38, 34, 0.06);
+}
+
+.search-location,
+.search-time {
+  min-height: 72px;
+  padding: 13px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.search-location {
+  border-right: 1px dashed var(--line);
+}
+
+.search-location small,
+.search-time small {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.search-location strong,
+.search-time strong {
+  font-family: "Fraunces", serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.search-arrow {
+  width: 38px;
+  color: var(--sage);
+  font-family: "Space Mono", monospace;
+  font-size: 18px;
+  text-align: center;
+}
+
+.search-time {
+  border-right: 1px dashed var(--line);
+}
+
+.find-button {
+  min-height: 54px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  border-radius: 11px;
+  color: var(--ink);
+  background: var(--coral);
+  font-weight: 800;
+  box-shadow: 0 4px 0 #d86f83;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.find-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #d86f83;
+}
+
+.matches-header {
+  margin-top: 65px;
+}
+
+.matches-header h2 {
+  margin: 10px 0 0;
+  font-family: "Fraunces", serif;
+  font-size: 39px;
+  letter-spacing: -0.045em;
+}
+
+.match-explanation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tiny-score {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--butter);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  transform: rotate(7deg);
+}
+
+.ride-board {
+  position: relative;
+  min-height: 460px;
+  margin-top: 35px;
+  padding: 65px 35px 45px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  border-radius: 6px;
+  background:
+    radial-gradient(
+      circle,
+      rgba(43, 38, 34, 0.08) 1px,
+      transparent 1px
+    ),
+    #c9aa82;
+  background-size: 15px 15px;
+  box-shadow:
+    inset 0 0 0 8px rgba(105, 78, 49, 0.09),
+    0 12px 30px rgba(43, 38, 34, 0.12);
+}
+
+.board-scribble {
+  position: absolute;
+  top: 15px;
+  left: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #5e4730;
+  font-family: "Fraunces", serif;
+  font-size: 18px;
+  transform: rotate(-3deg);
+}
+
+.board-scribble div {
+  font-size: 22px;
+  transform: rotate(25deg);
+}
+
+
+/* =========================================================
+   FIND RIDE CARDS
+   ========================================================= */
+
+.ride-card {
+  position: relative;
+  min-width: 0;
+  padding: 28px 23px 22px;
+  background: #fffdf9;
+  box-shadow:
+    2px 5px 0 rgba(43, 38, 34, 0.08),
+    0 12px 25px rgba(43, 38, 34, 0.12);
+  transform: rotate(var(--rotation));
+  transition: 180ms ease;
+}
+
+.ride-card:hover {
+  transform: rotate(0deg) translateY(-7px);
+  z-index: 5;
+  box-shadow:
+    4px 10px 0 rgba(43, 38, 34, 0.08),
+    0 20px 35px rgba(43, 38, 34, 0.15);
+}
+
+.ride-card::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 88px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-1deg);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.washi-tape {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 86px;
+  height: 20px;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(255, 143, 163, 0.35);
+}
+
+.ride-card--sage .washi-tape {
+  background: rgba(143, 168, 118, 0.4);
+}
+
+.ride-card--lavender .washi-tape {
+  background: rgba(180, 167, 229, 0.45);
+}
+
+.score-sticker {
+  position: absolute;
+  top: -20px;
+  right: -18px;
+  width: 70px;
+  height: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--butter);
+  color: var(--ink);
+  box-shadow: 2px 4px 0 rgba(43, 38, 34, 0.12);
+  transform: rotate(8deg);
+  z-index: 4;
+}
+
+.score-sticker strong {
+  font-family: "Space Mono", monospace;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.score-sticker span {
+  margin-top: 4px;
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ride-card-top {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.avatar {
+  width: 39px;
+  height: 39px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lavender);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.ride-card--sage .avatar {
+  background: var(--sage);
+}
+
+.ride-card--coral .avatar {
+  background: var(--coral);
+}
+
+.rider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rider-info strong {
+  font-family: "Fraunces", serif;
+  font-size: 17px;
+}
+
+.rider-info span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.ride-card .route-illustration {
+  margin: 25px 0;
+}
+
+.ride-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 13px 0;
+  border-top: 1px dashed var(--line);
+  border-bottom: 1px dashed var(--line);
+}
+
+.ride-meta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ride-meta > div:not(:first-child) {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.ride-meta span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+}
+
+.ride-meta strong {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+}
+
+.request-button {
+  width: 100%;
+  min-height: 43px;
+  margin-top: 15px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink);
+  background: rgba(255, 143, 163, 0.15);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ride-card--sage .request-button {
+  background: rgba(143, 168, 118, 0.18);
+}
+
+.ride-card--lavender .request-button {
+  background: rgba(180, 167, 229, 0.2);
+}
+
+
+/* =========================================================
+   OFFER RIDE
+   ========================================================= */
+
+.offer-heading {
+  padding-bottom: 50px;
+}
+
+.offer-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  gap: 65px;
+  align-items: start;
+}
+
+.offer-form {
+  padding: 35px 38px;
+  background: #fffdf9;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 8px 25px rgba(43, 38, 34, 0.05);
+}
+
+.form-section {
+  display: grid;
+  grid-template-columns: 45px 1fr;
+  gap: 18px;
+  padding: 28px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.form-section:first-child {
+  padding-top: 0;
+}
+
+.form-number {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--butter);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.form-section:nth-child(2) .form-number {
+  background: var(--sage);
+}
+
+.form-section:nth-child(3) .form-number {
+  background: var(--lavender);
+}
+
+.form-section h3 {
+  margin: 0 0 20px;
+  font-family: "Fraunces", serif;
+  font-size: 24px;
+}
+
+.offer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 17px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.offer-form input,
+.offer-form select {
+  width: 100%;
+  height: 51px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  outline: none;
+  color: var(--ink);
+  background: var(--blush);
+  font: inherit;
+}
+
+.offer-form input:focus,
+.offer-form select:focus {
+  border-color: var(--coral);
+  box-shadow: 0 0 0 4px rgba(255, 143, 163, 0.12);
+}
+
+.form-two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+}
+
+.offer-submit {
+  margin-top: 28px;
+}
+
+.offer-note {
+  position: relative;
+  padding: 35px;
+  background: var(--butter);
+  transform: rotate(1.5deg);
+  box-shadow: 5px 7px 0 rgba(43, 38, 34, 0.1);
+}
+
+.offer-note::before {
+  content: "";
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 100px;
+  height: 25px;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.offer-sticker {
+  width: 55px;
+  height: 55px;
+  margin-bottom: 35px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--coral);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  transform: rotate(-8deg);
+}
+
+.offer-note h2 {
+  margin: 12px 0 20px;
+  font-family: "Fraunces", serif;
+  font-size: 35px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+}
+
+.offer-note p {
+  margin: 0;
+  color: #5f5148;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+
+/* =========================================================
+   MY TRIPS
+   ========================================================= */
+
+.trip-tabs {
+  display: flex;
+  gap: 5px;
+  margin: 10px 0 28px;
+  padding: 5px;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffdf9;
+}
+
+.trip-tabs button {
+  padding: 9px 18px;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trip-tabs button.active {
+  color: var(--ink);
+  background: var(--coral);
+}
+
+.trip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.trip-card {
+  display: grid;
+  grid-template-columns: 130px 1fr 190px 150px;
+  gap: 25px;
+  align-items: center;
+  padding: 23px 25px;
+  background: #fffdf9;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  transition: 160ms ease;
+}
+
+.trip-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(43, 38, 34, 0.07);
+}
+
+.trip-date {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.trip-date span {
+  color: var(--coral-dark);
+  font-family: "Space Mono", monospace;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.trip-date strong {
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+}
+
+.trip-route {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.trip-route > div:not(.trip-line) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trip-route small {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+}
+
+.trip-route strong {
+  font-family: "Fraunces", serif;
+  font-size: 16px;
+}
+
+.trip-line {
+  flex: 1;
+  color: var(--sage);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 8px 0;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-accepted {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-declined {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.trip-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trip-person > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trip-person strong {
+  font-family: "Fraunces", serif;
+  font-size: 15px;
+}
+
+.trip-person span {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.trip-card .secondary-button {
+  width: auto;
+  min-height: 43px;
+  padding: 0 15px;
+  font-size: 9px;
+}
+
+.empty-trips {
+  position: relative;
+  max-width: 600px;
+  margin: 55px auto;
+  padding: 60px;
+  text-align: center;
+  background: var(--sage-light);
+  border: 1px dashed var(--sage);
+  transform: rotate(-1deg);
+}
+
+.empty-sticker {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lavender);
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  transform: rotate(7deg);
+}
+
+.empty-trips h2 {
+  margin: 0 0 12px;
+  font-family: "Fraunces", serif;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.empty-trips p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+
+/* =========================================================
+   REQUEST MODAL / SUCCESS
+   ========================================================= */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(43, 38, 34, 0.45);
+  backdrop-filter: blur(5px);
+}
+
+.request-modal {
+  position: relative;
+  width: min(470px, 100%);
+  padding: 45px;
+  background: var(--paper);
+  border-radius: 16px;
+  box-shadow: 0 25px 70px rgba(43, 38, 34, 0.25);
+}
+
+.request-modal h2 {
+  margin: 12px 0;
+  font-family: "Fraunces", serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.request-modal p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.modal-sticker {
+  position: absolute;
+  top: -24px;
+  right: 25px;
+  width: 65px;
+  height: 65px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--coral);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  transform: rotate(9deg);
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.modal-actions .primary-button,
+.modal-actions .secondary-button {
+  width: 100%;
+}
+
+.success-message {
+  position: fixed;
+  right: 25px;
+  bottom: 25px;
+  z-index: 100;
+  min-width: 280px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--sage);
+  color: var(--ink);
+  box-shadow: 4px 6px 0 rgba(43, 38, 34, 0.12);
+  transform: rotate(-1deg);
+}
+
+.success-message strong {
+  font-family: "Fraunces", serif;
+  font-size: 18px;
+}
+
+.success-message span {
+  font-size: 9px;
+}
+
+
+/* =========================================================
+   NEW PAGE RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 950px) {
+  .search-panel {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .search-arrow {
+    display: none;
+  }
+
+  .search-location {
+    border-right: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .search-time {
+    border-right: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .find-button {
+    margin: 8px;
+  }
+
+  .ride-board {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .offer-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .offer-note {
+    max-width: 500px;
+  }
+
+  .trip-card {
+    grid-template-columns: 110px 1fr 140px;
+  }
+
+  .trip-card .secondary-button {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 650px) {
+  .page-shell {
+    width: calc(100% - 32px);
+    padding-bottom: 50px;
+  }
+
+  .page-heading {
+    padding-top: 30px;
+  }
+
+  .page-heading h1 {
+    font-size: 48px;
+  }
+
+  .page-heading::after {
+    display: none;
+  }
+
+  .search-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .search-location,
+  .search-time {
+    border-bottom: 1px dashed var(--line);
+  }
+
+  .find-button {
+    margin: 8px 0 0;
+  }
+
+  .ride-board {
+    grid-template-columns: 1fr;
+    padding: 55px 20px 35px;
+  }
+
+  .matches-header h2 {
+    font-size: 30px;
+  }
+
+  .offer-form {
+    padding: 25px 20px;
+  }
+
+  .form-section {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-two-column {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .trip-card {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+
+  .trip-card .secondary-button {
+    grid-column: auto;
+    width: 100%;
+  }
+
+  .trip-route {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trip-line {
+    width: 100%;
+  }
+
+  .request-modal {
+    padding: 35px 25px;
+  }
+}
+/* =========================================================
+   CAMPUSHOP TYPOGRAPHY POLISH
+   ========================================================= */
+
+.page-shell {
+  font-size: 14px;
+}
+
+.page-heading h1 {
+  font-size: clamp(58px, 6.2vw, 84px);
+}
+
+.page-heading p {
+  font-size: 16px;
+}
+
+.search-location small,
+.search-time small {
+  font-size: 10px;
+}
+
+.search-location strong,
+.search-time strong {
+  font-size: 21px;
+}
+
+.matches-header h2 {
+  font-size: 43px;
+}
+
+.match-explanation {
+  font-size: 12px;
+}
+
+.ride-card {
+  padding: 31px 25px 24px;
+}
+
+.rider-info strong {
+  font-size: 19px;
+}
+
+.rider-info span {
+  font-size: 11px;
+}
+
+.ride-meta span {
+  font-size: 9px;
+}
+
+.ride-meta strong {
+  font-size: 12px;
+}
+
+.request-button {
+  min-height: 48px;
+  font-size: 11px;
+}
+
+.board-scribble {
+  font-size: 20px;
+}
+
+.score-sticker strong {
+  font-size: 17px;
+}
+
+.score-sticker span {
+  font-size: 8px;
+}
+.logo-button {
+  width: 175px;
+  height: 92px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.logo-button .campushop-logo {
+  width: 145px;
+  height: auto;
+  display: block;
+  mix-blend-mode: multiply;
+}
+/* =========================================================
+   CAMPUSHOP NAVBAR — FINAL TYPOGRAPHY
+   ========================================================= */
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 44px;
+}
+
+.main-nav button {
+  position: relative;
+
+  padding: 18px 0 20px;
+
+  border: none;
+  background: transparent;
+
+  color: #81776f;
+
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.main-nav button:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.main-nav button.active {
+  color: var(--ink);
+}
+
+/* Active coral line */
+.main-nav button.active::after {
+  content: "";
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 3px;
+
+  background: var(--coral);
+}
+
+
+/* =========================================================
+   PROFILE
+   ========================================================= */
+
+.profile-menu > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-menu > div:nth-child(2) strong {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.profile-menu > div:nth-child(2) span {
+  font-family: "Space Mono", monospace;
+  font-size: 7px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+
+/* Avatar */
+.mini-avatar {
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+
+/* Logout button */
+.logout-button {
+  margin-left: 8px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--coral);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #d86f83;
+  transition: 160ms ease;
+}
+
+.logout-button:hover {
+  color: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 0 #d86f83;
+}
+.main-nav button {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.profile-menu > div:nth-child(2) strong {
+  font-size: 12px;
+}
+.main-nav {
+  gap: 40px;
+}
+/* =========================================================
+   MAPS & ADDRESS AUTOCOMPLETE
+   ========================================================= */
+
+.address-input {
+  position: relative;
+  display: block;
+}
+
+.address-results {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(43, 38, 34, 0.14);
+}
+
+.address-results li + li {
+  margin-top: 2px;
+}
+
+.address-results button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  background: transparent;
+  border-radius: 10px;
+  transition: background 120ms ease;
+}
+
+.address-results button.highlighted {
+  background: var(--blush);
+}
+
+.address-results strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.address-results span {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.address-pin,
+.address-hint {
+  display: block;
+  margin-top: 6px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.address-pin {
+  color: var(--sage);
+}
+
+.address-hint {
+  color: var(--muted);
+}
+
+.route-status {
+  margin: 12px 0 0;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.route-preview {
+  margin-top: 16px;
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.route-preview-stats,
+.ride-map-stats {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 12px;
+}
+
+.ride-map-stats {
+  margin: 14px 0 0;
+}
+
+.route-preview-stats small,
+.ride-map-stats small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.route-preview-stats strong,
+.ride-map-stats strong {
+  font-family: "Fraunces", serif;
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.route-map {
+  width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--blush);
+}
+
+.route-map--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ride-map-panel {
+  margin: 24px 0;
+  padding: 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 10px 0 rgba(43, 38, 34, 0.05);
+}
+
+/* Route endpoint markers drawn by RouteMap. */
+.map-pin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid var(--white);
+  box-shadow: 0 2px 6px rgba(43, 38, 34, 0.35);
+  cursor: pointer;
+}
+
+.map-pin--pickup {
+  background: var(--sage);
+}
+
+.map-pin--dropoff {
+  background: var(--coral-dark);
+}
+
+/* Every custom marker on a Google map is an OverlayView div, positioned
+   by the overlay itself. It must not lay out as a block in the pane. */
+.gm-html-marker {
+  width: max-content;
+  line-height: 0;
+}
+
+/* Google's own attribution and terms links must stay legible — they are
+   a condition of using the map, not decoration. */
+.route-map .gm-style,
+.live-map .gm-style,
+.map-picker-map .gm-style {
+  font-family: inherit;
+}
+
+@media (max-width: 650px) {
+  .route-preview-stats,
+  .ride-map-stats {
+    gap: 18px;
+  }
+}
+
+/* =========================================================
+   LIVE SEARCH / RANKED MATCHES
+   ========================================================= */
+
+.search-panel--live,
+.commute-form--live {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 0.7fr 0.7fr auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.commute-form--live {
+  grid-template-columns: 1.2fr 1.2fr 0.7fr auto;
+}
+
+.search-panel--live .address-input,
+.search-panel--live .search-field,
+.commute-form--live .address-input,
+.commute-form--live .search-field {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.search-panel--live input,
+.search-panel--live select,
+.commute-form--live input,
+.commute-form--live select {
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px 12px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.search-panel--live input:focus,
+.search-panel--live select:focus,
+.commute-form--live input:focus,
+.commute-form--live select:focus {
+  outline: none;
+  border-color: var(--coral);
+}
+
+.search-panel--live .find-button,
+.commute-form--live .find-button {
+  align-self: end;
+}
+
+.find-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.search-hint {
+  margin: 4px 0 0;
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* --- map legend --- */
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.legend-item::before {
+  content: "";
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.legend-item--mine::before {
+  background: var(--lavender);
+}
+
+.legend-item--theirs::before {
+  background: var(--coral);
+}
+
+/* --- match explanation on each card --- */
+
+.match-notes {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  background: var(--sage-light);
+  border-radius: 999px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: #55663f;
+  text-align: center;
+}
+
+.match-notes--warn {
+  background: var(--butter-light);
+  color: #7a5c12;
+}
+
+/* --- hover link between a card and its route on the map --- */
+
+.ride-card-slot {
+  transition: transform 160ms ease;
+}
+
+.ride-card-slot--active {
+  transform: translateY(-3px);
+}
+
+.ride-card-slot--active .ride-card {
+  border-color: var(--coral);
+  box-shadow: 0 10px 0 rgba(255, 143, 163, 0.35);
+}
+
+@media (max-width: 950px) {
+  .search-panel--live,
+  .commute-form--live {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .search-panel--live .find-button,
+  .commute-form--live .find-button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 650px) {
+  .search-panel--live,
+  .commute-form--live {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   LOCATION / NEARBY FILTER
+   ========================================================= */
+
+.location-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.location-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.location-state--ok {
+  color: var(--sage);
+}
+
+.location-state--off {
+  color: #b07a4b;
+}
+
+/* Pulsing dot while a fix is held. */
+.location-ping {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sage);
+}
+
+.location-ping::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--sage);
+  opacity: 0;
+  animation: location-pulse 2s ease-out infinite;
+}
+
+@keyframes location-pulse {
+  0% { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .location-ping::after { animation: none; }
+}
+
+.location-bar .checkbox-label {
+  margin: 0;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.radius-select {
+  padding: 6px 10px;
+  background: var(--blush);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.radius-select:disabled {
+  opacity: 0.45;
+}
+
+.filter-note {
+  margin: 18px 0 0;
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.filter-note .text-button {
+  font-size: 12px;
+}
+
+/* --- distance badge on each card --- */
+
+.proximity-tag {
+  margin: 10px 0 0;
+  padding: 7px 12px;
+  background: var(--lavender-light);
+  border-radius: 999px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5a4b8a;
+  text-align: center;
+}
+
+/* --- "you are here" marker + legend --- */
+
+.map-pin--me {
+  background: var(--lavender);
+  border-color: var(--white);
+  box-shadow:
+    0 0 0 4px rgba(180, 167, 229, 0.35),
+    0 2px 6px rgba(43, 38, 34, 0.35);
+}
+
+.legend-item--me::before {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lavender);
+}
+
+@media (max-width: 650px) {
+  .location-bar {
+    border-radius: 18px;
+    gap: 10px;
+  }
+}
+
+/* Server-side rule violations surface here: requesting your own ride,
+   a full vehicle, an expired session. */
+.api-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding: 14px 18px;
+  background: var(--butter-light);
+  border: 1px solid var(--butter);
+  border-radius: 14px;
+}
+
+.api-error strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #7a5c12;
+}
+
+.api-error button {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(122, 92, 18, 0.12);
+  color: #7a5c12;
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* =========================================================
+   REQUEST STATE
+   The button reports what the server says about this ride: already
+   asked, already yours, or already full. Each of those is a settled
+   fact rather than an action, so it reads as a label, not a button.
+   ========================================================= */
+
+.request-button:disabled {
+  cursor: default;
+  justify-content: center;
+  border-style: dashed;
+  opacity: 1;
+}
+
+.request-button--pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.request-button--accepted {
+  background: #d4edda;
+  color: #155724;
+}
+
+.request-button--declined,
+.request-button--full {
+  background: #f1efe9;
+  color: #6b665c;
+}
+
+.request-button--own {
+  background: transparent;
+  color: #6b665c;
+}
+
+.request-button--sending {
+  background: #f1efe9;
+  color: #6b665c;
+}
+
+/* Where a rider sits in the driver's queue. Requests are answered
+   oldest-first, so this number is the whole point of the ordering. */
+.queue-position {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.queue-position span {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.queue-position small {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+/* The first paint, before we know whether the stored session is good. */
+.auth-page--booting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+/* =========================================================
+   PICK ON MAP
+   Typing finds the street; the pin finds the gate. Every address
+   field carries both.
+   ========================================================= */
+
+/* Wraps the input alone, so the button anchors to the field rather than
+   to the whole label — which also carries the hint line underneath. */
+.address-field {
+  position: relative;
+  display: block;
+}
+
+.address-field input {
+  width: 100%;
+}
+
+/* Sits over the right-hand end of the field's own input. */
+.address-map-button {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  padding: 5px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.address-map-button:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/* Leave room so a long address never runs under the button. */
+.address-field input {
+  padding-right: 74px;
+}
+
+/* The category chip beside a suggestion — "college", "bus stop". */
+.address-results strong {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.place-kind {
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.map-picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 94vw);
+  max-height: 92vh;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(43, 38, 34, 0.3);
+  overflow: hidden;
+}
+
+.map-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+
+.map-picker-head h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.map-picker-close {
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.map-picker-search {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 12px;
+}
+
+.map-picker-search input {
+  flex: 1;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+}
+
+.map-picker-search .secondary-button {
+  min-height: 42px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.map-picker-search .address-results {
+  top: calc(100% - 6px);
+  left: 20px;
+  right: 20px;
+}
+
+.map-picker-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+}
+
+.map-picker-map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Anchored to the frame rather than the map: the pin holds still and the
+   world moves under it, so the target is never hidden by a finger. */
+.map-picker-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+
+.map-picker-pin {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--ink);
+  border-radius: 50% 50% 50% 0;
+  background: var(--coral, #ff8fa3);
+  transform: rotate(-45deg);
+  box-shadow: 0 3px 8px rgba(43, 38, 34, 0.35);
+}
+
+.map-picker-shadow {
+  width: 10px;
+  height: 4px;
+  margin: 5px auto 0;
+  border-radius: 50%;
+  background: rgba(43, 38, 34, 0.35);
+}
+
+.map-picker-readout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 20px 18px;
+  border-top: 1.5px solid var(--line);
+}
+
+.map-picker-readout small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.map-picker-readout strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.map-picker-readout span {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.map-picker-readout .modal-actions {
+  margin: 0;
+}
+
+@media (max-width: 620px) {
+  .map-picker-search {
+    flex-wrap: wrap;
+  }
+
+  .map-picker-canvas {
+    min-height: 240px;
+  }
+
+  .map-picker-readout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* =========================================================
+   NEW REQUEST POPUP
+   A request is someone waiting on an answer to plan their morning.
+   It reaches the driver on whatever page they are on, and is
+   answerable there without losing their place.
+   ========================================================= */
+
+.request-alerts {
+  position: fixed;
+  z-index: 120;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.request-alert {
+  position: relative;
+  padding: 18px 16px 14px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(43, 38, 34, 0.24);
+  transform: rotate(-0.5deg);
+  animation: alert-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes alert-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) rotate(-0.5deg);
+  }
+}
+
+/* Motion is decoration here; the popup must still arrive without it. */
+@media (prefers-reduced-motion: reduce) {
+  .request-alert {
+    animation: none;
+  }
+}
+
+.request-alert-tape {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 74px;
+  height: 18px;
+  transform: translateX(-50%) rotate(-1.5deg);
+  background: rgba(255, 143, 163, 0.55);
+  border-left: 1px dashed rgba(43, 38, 34, 0.25);
+  border-right: 1px dashed rgba(43, 38, 34, 0.25);
+}
+
+.request-alert-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.request-alert-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px;
+}
+
+.request-alert-person strong {
+  display: block;
+  font-size: 15px;
+}
+
+.request-alert-person span {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.request-alert-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.request-alert-route strong {
+  font-weight: 700;
+}
+
+.request-alert-route span {
+  color: var(--muted);
+}
+
+.request-alert-when {
+  margin: 8px 0 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.request-alert .modal-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.request-alert .modal-actions button {
+  flex: 1;
+  min-height: 38px;
+  font-size: 11px;
+}
+
+.request-alert .text-button {
+  display: block;
+  margin: 10px auto 0;
+  font-size: 11px;
+}
+
+/* Count on the nav, so a dismissed popup is still findable. */
+.main-nav button {
+  position: relative;
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--coral);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 620px) {
+  .request-alerts {
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: 60vh;
+  }
+}
+
+/* =========================================================
+   VEHICLE PROMPT
+   Catches up accounts created before signup asked about vehicles.
+   ========================================================= */
+
+.vehicle-prompt {
+  width: min(520px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.vehicle-prompt .role-grid {
+  margin: 18px 0 4px;
+}
+
+/* Labels here are stacked fields, not inline text — without this the
+   caption runs alongside its own input. */
+.vehicle-prompt .prompt-field {
+  display: block;
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.vehicle-prompt .prompt-field input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.vehicle-prompt .prompt-field input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.vehicle-prompt .form-error {
+  margin-top: 14px;
+}
+
+.vehicle-prompt .modal-actions {
+  margin-top: 20px;
+}
+
+/* The signup form's own vehicle-number caption. */
+.field-note {
+  display: block;
+  margin-top: 5px;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* =========================================================
+   LIVE RIDE
+   Opens the moment a ride is accepted: the route, the way along it,
+   the vehicle to look for, and where you are right now.
+   ========================================================= */
+
+.live-ride-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.live-ride-card {
+  padding: 18px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 6px 8px 0 rgba(43, 38, 34, 0.12);
+}
+
+.live-vehicle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-vehicle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--blush);
+  font-size: 24px;
+}
+
+.live-vehicle strong {
+  display: block;
+  font-size: 16px;
+}
+
+.live-vehicle span {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.live-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+}
+
+.live-route small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.live-route strong {
+  font-size: 14px;
+}
+
+.live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.live-stats small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.live-stats strong {
+  font-size: 15px;
+}
+
+.live-arrived {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #d4edda;
+  color: #155724;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.live-map-wrap {
+  position: relative;
+  margin-top: 16px;
+}
+
+.live-map {
+  height: min(58vh, 520px);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.recentre-button {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  padding: 9px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(43, 38, 34, 0.2);
+}
+
+/* Direction of travel, laid along the route. */
+.route-arrow {
+  color: #2b2622;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.55;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+/* The viewer's own position: a vehicle when driving, a figure when not. */
+.live-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 4px 12px rgba(43, 38, 34, 0.35);
+}
+
+.live-marker-glyph {
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 400ms ease;
+}
+
+.trip-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 620px) {
+  .live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-map {
+    height: 46vh;
+  }
+}
+
+/* =========================================================
+   GOOGLE MAPS
+   The map is Google's; the routes drawn on it are our own, computed
+   by OpenRouteService and stored per ride.
+   ========================================================= */
+
+/* Direction arrows: the wrapper is placed by the overlay, the glyph
+   inside it carries the rotation. Two elements, because the overlay owns
+   the wrapper's transform. */
+.route-arrow-wrap {
+  pointer-events: none;
+}
+
+.route-arrow {
+  display: block;
+  color: #2b2622;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.55;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+/* A pick that could not be resolved to coordinates. */
+.address-hint--error {
+  color: var(--coral-dark);
+}
+
+/* =========================================================
+   GETTING TO THE PICKUP POINT
+   Everything before the meeting is one job. The stored route only
+   covers what happens after it.
+   ========================================================= */
+
+.live-phase {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: var(--butter, #fff3cd);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+}
+
+.live-phase--met {
+  background: #d4edda;
+}
+
+.live-phase-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--white);
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+}
+
+.live-phase-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.live-phase-copy strong {
+  display: block;
+  font-size: 15px;
+}
+
+.live-phase-copy span {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.live-phase .secondary-button {
+  flex: none;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+/* Call, message, call it off. */
+.live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--line);
+}
+
+.live-actions .secondary-button {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+/* Backing out is a real option, but never the obvious one — it sits
+   apart from the actions that keep the trip going. */
+.danger-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid var(--coral-dark);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--coral-dark);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.live-actions .danger-button {
+  margin-left: auto;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--coral-dark);
+  color: var(--white);
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The prompt's vehicle question, once a phone field precedes it. */
+.prompt-question {
+  display: block;
+  margin-top: 18px;
+}
+
+@media (max-width: 620px) {
+  .live-phase {
+    flex-wrap: wrap;
+  }
+
+  .live-actions .danger-button {
+    margin-left: 0;
+  }
+}
+
+/* =========================================================
+   WAITING FOR AN ANSWER
+   The minute between asking for a seat and hearing back.
+   ========================================================= */
+
+.waiting-modal {
+  position: relative;
+  width: min(430px, 100%);
+  padding: 40px 32px 30px;
+  background: var(--paper);
+  border-radius: 16px;
+  box-shadow: 0 25px 70px rgba(43, 38, 34, 0.25);
+  text-align: center;
+}
+
+.waiting-modal h2 {
+  margin: 10px 0 6px;
+  font-size: 26px;
+}
+
+.waiting-modal p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* The road the scooter travels along. */
+.waiting-road {
+  position: relative;
+  height: 96px;
+  margin-bottom: 14px;
+}
+
+.waiting-road-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  height: 3px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--ink) 0 14px,
+    transparent 14px 28px
+  );
+  opacity: 0.35;
+}
+
+/* Scrolling the dashes rather than moving the scooter keeps it centred
+   and legible — the world goes past, as it does on a real journey. */
+.waiting-road--moving .waiting-road-line {
+  animation: road-scroll 700ms linear infinite;
+}
+
+@keyframes road-scroll {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: -28px;
+  }
+}
+
+/* A window onto the logo artwork, showing the scooter alone.
+   The file is the full lockup — scooter, wordmark, tagline — so the image
+   is scaled up and offset until only the scooter sits in the frame.
+   Percentages are of this box, derived from where the scooter falls in
+   the 1536x1024 original. */
+.waiting-scooter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  width: 76px;
+  height: 76px;
+  margin-left: -38px;
+  overflow: hidden;
+}
+
+.waiting-scooter img {
+  position: absolute;
+  width: 304%;
+  max-width: none;
+  left: -101%;
+  top: -19%;
+}
+
+.waiting-road--moving .waiting-scooter {
+  animation: scooter-bob 620ms ease-in-out infinite;
+}
+
+@keyframes scooter-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+}
+
+/* An answer stops the journey. A logo still cheerfully driving along
+   under "Not this time" would be reading the room badly. */
+.waiting-modal--declined .waiting-scooter,
+.waiting-modal--gone .waiting-scooter {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.waiting-progress {
+  height: 8px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  overflow: hidden;
+}
+
+.waiting-progress-bar {
+  height: 100%;
+  background: var(--coral);
+  border-radius: 999px;
+  transition: width 120ms linear;
+}
+
+/* Out of time, not out of luck — the request is still open. */
+.waiting-progress-bar--overdue {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--coral) 0 8px,
+    var(--butter, #ffe8a3) 8px 16px
+  );
+}
+
+.waiting-count {
+  margin-bottom: 18px;
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.waiting-modal .modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.waiting-modal .modal-actions button {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waiting-road--moving .waiting-road-line,
+  .waiting-road--moving .waiting-scooter {
+    animation: none;
+  }
+}
+
+/* =========================================================
+   PROFILE
+   The header avatar is the way in; the page is where the gaps
+   signup left behind get filled.
+   ========================================================= */
+
+/* The avatar and name are now a button. The old layout hung off
+   `.profile-menu > div:nth-child(2)`, which this wrapper displaces, so
+   the name stack is re-established here. */
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 8px 4px 4px;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.profile-button:hover,
+.profile-button.active {
+  border-color: var(--ink);
+  background: var(--white);
+}
+
+.profile-button > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-button strong {
+  display: block;
+  font-size: 10px;
+}
+
+.profile-button span {
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* An unfilled profile, marked where it gets fixed. */
+.profile-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 0 0 2px var(--white);
+}
+
+.profile-gap {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 2px dashed var(--coral-dark);
+  border-radius: 14px;
+  background: rgba(255, 143, 163, 0.12);
+}
+
+.profile-gap strong {
+  display: block;
+  font-size: 14px;
+}
+
+.profile-gap span {
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 620px;
+}
+
+.profile-card {
+  padding: 20px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 6px 8px 0 rgba(43, 38, 34, 0.1);
+}
+
+.profile-card h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.profile-card label {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.profile-card label input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.profile-card label input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.profile-card .role-grid {
+  margin-bottom: 18px;
+}
+
+/* Set at sign-up and not ours to change here. */
+.profile-readonly {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--line);
+}
+
+.profile-readonly small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.profile-readonly strong {
+  font-size: 14px;
+  text-transform: none;
+}
+
+/* What the plate will actually look like to a rider at the kerb. */
+.profile-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+}
+
+.profile-preview small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.profile-preview strong {
+  font-family: "Space Mono", monospace;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+.profile-saved {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #d4edda;
+  color: #155724;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.profile-form > .primary-button {
+  align-self: flex-start;
+  min-width: 200px;
+}
+
+/* =========================================================
+   LIVE TRACKING
+   Two legs, two lines: getting to the pickup point, then the ride
+   itself. Telling them apart is how someone drives the right route.
+   ========================================================= */
+
+.live-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.live-steps button {
+  flex: 1;
+  min-width: 130px;
+  min-height: 44px;
+  font-size: 11px;
+}
+
+.live-phase--moving {
+  background: var(--lavender, #e6e1f7);
+}
+
+/* The car a rider is watching, as opposed to the rider themselves. */
+.live-marker--driver {
+  border-color: var(--coral-dark);
+  box-shadow:
+    0 0 0 4px rgba(255, 143, 163, 0.3),
+    0 4px 12px rgba(43, 38, 34, 0.35);
+}
+
+/* Shown greyed rather than hidden — a marker frozen in the wrong street
+   with no explanation is worse than one openly marked as old. */
+.live-marker--stale {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+
+.live-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.live-legend span::before {
+  content: "";
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-pickup::before {
+  background: #5b6ee1;
+}
+
+.legend-ride::before {
+  background: #ff8fa3;
+}
+
+.legend-trail::before {
+  background: rgba(43, 38, 34, 0.4);
+}
+
+/* The message a waiting rider is looking for, on the trips list. */
+.arrived-badge {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #d4edda;
+  color: #155724;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  animation: arrived-pulse 1.6s ease-in-out infinite;
+}
+
+.arrived-badge--moving {
+  background: var(--lavender, #e6e1f7);
+  color: var(--ink);
+  animation: none;
+}
+
+@keyframes arrived-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(21, 87, 36, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(21, 87, 36, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrived-badge {
+    animation: none;
+  }
+}
