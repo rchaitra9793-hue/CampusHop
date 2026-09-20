@@ -2074,6 +2074,12 @@ button {
   color: #721c24;
 }
 
+/* Never answered, and the ride has already left. */
+.status-expired {
+  background: #e9e6e1;
+  color: #6b6259;
+}
+
 .trip-person {
   display: flex;
   align-items: center;
@@ -2741,6 +2747,15 @@ button {
   line-height: 0;
 }
 
+/* A pin is a fixed-size dot with no content inside it, and `max-content`
+   above measures content — which for an empty div is nothing at all. The
+   two classes land on the same element, so without this the dots collapse
+   to zero width and all that renders is their white border: a small white
+   ring where a coloured pin should be. */
+.gm-html-marker.map-pin {
+  width: 16px;
+}
+
 /* Google's own attribution and terms links must stay legible — they are
    a condition of using the map, not decoration. */
 .route-map .gm-style,
@@ -3012,6 +3027,53 @@ button {
 
 /* --- distance badge on each card --- */
 
+/* The day + distance chips sit on one row under the driver. */
+.ride-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ride-tags .proximity-tag {
+  flex: 1 1 auto;
+  margin: 10px 0 0;
+}
+
+/* Which day the ride leaves. Stated on the card because a bare time
+   reads as "today" to anyone skimming the board. */
+.day-tag {
+  margin: 10px 0 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.day-tag--today {
+  background: #ffe9d6;
+  color: #8a4b1f;
+}
+
+.day-tag--ahead {
+  background: #dcece0;
+  color: #2f5d3f;
+}
+
+.day-tag--past {
+  background: #e9e6e1;
+  color: #6b6259;
+}
+
+.ride-meta-day {
+  font-family: "Space Mono", monospace;
+  font-size: 8px;
+  color: var(--muted);
+}
+
 .proximity-tag {
   margin: 10px 0 0;
   padding: 7px 12px;
@@ -3026,12 +3088,58 @@ button {
 
 /* --- "you are here" marker + legend --- */
 
+/* The one marker on the map that is a live reading rather than a place
+   somebody chose. It is given the halo-and-pulse every maps app uses for
+   a device position, which is what tells it apart at a glance from the
+   pickup and dropoff pins sitting next to it. */
 .map-pin--me {
+  position: absolute;
   background: var(--lavender);
   border-color: var(--white);
   box-shadow:
     0 0 0 4px rgba(180, 167, 229, 0.35),
     0 2px 6px rgba(43, 38, 34, 0.35);
+}
+
+/* The ring travelling outwards. On its own layer so the dot itself keeps
+   the exact position the overlay gave it. */
+.map-pin--me::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid var(--lavender);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: locate-pulse 2.4s ease-out infinite;
+}
+
+@keyframes locate-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+
+  70% {
+    transform: scale(3);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* A dot pulsing forever is exactly the kind of motion this asks to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .map-pin--me::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .legend-item--me::before {
@@ -3492,6 +3600,25 @@ button {
   color: var(--muted);
 }
 
+/* How long the rider has been waiting. These cards do not expire on a
+   timer, so the wait is the thing the driver needs to see. */
+.request-alert-sent {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -6px 0 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink, #2b2b2b);
+}
+
+.request-alert-sent span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
 .request-alert .modal-actions {
   display: flex;
   gap: 8px;
@@ -3610,27 +3737,8 @@ button {
    the vehicle to look for, and where you are right now.
    ========================================================= */
 
-.live-ride-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
 
-.live-ride-card {
-  padding: 18px;
-  background: var(--white);
-  border: 2px solid var(--ink);
-  border-radius: 16px;
-  box-shadow: 6px 8px 0 rgba(43, 38, 34, 0.12);
-}
 
-.live-vehicle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 
 .live-vehicle-icon {
   display: flex;
@@ -3644,47 +3752,6 @@ button {
   font-size: 24px;
 }
 
-.live-vehicle strong {
-  display: block;
-  font-size: 16px;
-}
-
-.live-vehicle span {
-  font-family: "Space Mono", monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.live-route {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 16px 0;
-  padding: 12px;
-  border: 1.5px dashed var(--line);
-  border-radius: 12px;
-}
-
-.live-route small {
-  display: block;
-  font-family: "Space Mono", monospace;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-.live-route strong {
-  font-size: 14px;
-}
-
-.live-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
 
 .live-stats small {
   display: block;
@@ -3708,17 +3775,7 @@ button {
   font-size: 13px;
 }
 
-.live-map-wrap {
-  position: relative;
-  margin-top: 16px;
-}
 
-.live-map {
-  height: min(58vh, 520px);
-  border: 2px solid var(--ink);
-  border-radius: 16px;
-  overflow: hidden;
-}
 
 .recentre-button {
   position: absolute;
@@ -3759,10 +3816,24 @@ button {
   box-shadow: 0 4px 12px rgba(43, 38, 34, 0.35);
 }
 
+/* An SVG box rather than a line of text. The rotation is the compass
+   heading, and the transition is what makes a car appear to turn a corner
+   rather than snap to a new angle on the next fix. */
 .live-marker-glyph {
-  font-size: 20px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
   transition: transform 400ms ease;
+}
+
+/* The pins and the person icon are drawings now; give them a box to sit
+   in so nothing depends on a font's idea of line height. */
+.live-person-icon svg,
+.live-vehicle-icon svg,
+.role-icon svg {
+  display: block;
 }
 
 .trip-card-actions {
@@ -3796,94 +3867,13 @@ button {
 
 .route-arrow {
   display: block;
-  color: #2b2622;
-  font-size: 13px;
-  line-height: 1;
-  opacity: 0.55;
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+  line-height: 0;
+  opacity: 0.6;
 }
 
 /* A pick that could not be resolved to coordinates. */
 .address-hint--error {
   color: var(--coral-dark);
-}
-
-/* =========================================================
-   GETTING TO THE PICKUP POINT
-   Everything before the meeting is one job. The stored route only
-   covers what happens after it.
-   ========================================================= */
-
-.live-phase {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 14px;
-  padding: 14px 16px;
-  background: var(--butter, #fff3cd);
-  border: 2px solid var(--ink);
-  border-radius: 16px;
-}
-
-.live-phase--met {
-  background: #d4edda;
-}
-
-.live-phase-step {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-  background: var(--white);
-  font-family: "Space Mono", monospace;
-  font-weight: 700;
-}
-
-.live-phase-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.live-phase-copy strong {
-  display: block;
-  font-size: 15px;
-}
-
-.live-phase-copy span {
-  display: block;
-  font-family: "Space Mono", monospace;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.live-phase .secondary-button {
-  flex: none;
-  min-height: 38px;
-  padding: 0 12px;
-  font-size: 11px;
-  text-decoration: none;
-}
-
-/* Call, message, call it off. */
-.live-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1.5px solid var(--line);
-}
-
-.live-actions .secondary-button {
-  min-height: 40px;
-  padding: 0 14px;
-  font-size: 11px;
-  text-decoration: none;
 }
 
 /* Backing out is a real option, but never the obvious one — it sits
@@ -3902,10 +3892,6 @@ button {
   transition: background 120ms ease, color 120ms ease;
 }
 
-.live-actions .danger-button {
-  margin-left: auto;
-}
-
 .danger-button:hover:not(:disabled) {
   background: var(--coral-dark);
   color: var(--white);
@@ -3920,16 +3906,6 @@ button {
 .prompt-question {
   display: block;
   margin-top: 18px;
-}
-
-@media (max-width: 620px) {
-  .live-phase {
-    flex-wrap: wrap;
-  }
-
-  .live-actions .danger-button {
-    margin-left: 0;
-  }
 }
 
 /* =========================================================
@@ -4276,27 +4252,1116 @@ button {
 }
 
 /* =========================================================
+   LIVE RIDE — the screen after a seat is confirmed
+   The map is the page and the rest is a sheet over it, which is the
+   shape every tracking screen has for the same reason: the thing you
+   came to look at is where the vehicle is.
+   ========================================================= */
+
+.live-ride-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Not `.secondary-button`: that one is a full-width block, and in a row
+   beside other things it takes the whole row and crushes them to nothing. */
+.live-back {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.live-back:hover {
+  background: var(--cream);
+}
+
+.live-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(330px, 0.6fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.live-map-wrap {
+  position: relative;
+}
+
+.live-map {
+  height: clamp(420px, calc(100vh - 190px), 720px);
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--cream);
+}
+
+/* The sheet. Scrolls on its own so the map keeps its height on a long
+   trip card, rather than the two of them fighting over the page. */
+.live-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: clamp(420px, calc(100vh - 190px), 720px);
+  overflow-y: auto;
+  padding: 16px;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 6px 8px 0 rgba(43, 38, 34, 0.12);
+}
+
+/* --- status --- */
+
+.live-phase {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: var(--butter, #fff3cd);
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+}
+
+.live-phase--met {
+  background: #d4edda;
+}
+
+.live-phase--moving {
+  background: var(--lavender, #e6e1f7);
+}
+
+.live-phase-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--white);
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+}
+
+.live-phase-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.live-phase-copy strong {
+  display: block;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.live-phase-copy span {
+  display: block;
+  margin-top: 3px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* --- the one thing to do next --- */
+
+.live-do {
+  display: flex;
+  gap: 8px;
+}
+
+.live-do-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+}
+
+/* The alternative to the primary action, and visibly the lesser of the
+   two. On its own it still has to be a comfortable target. */
+.live-do-alt {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.live-do-alt:hover {
+  background: var(--cream);
+}
+
+.live-ask {
+  margin: 0;
+  padding: 11px 13px;
+  border: 2px dashed var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* --- who you are travelling with --- */
+
+.live-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+}
+
+.live-person-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+  font-size: 20px;
+}
+
+.live-person-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.live-person-who strong {
+  display: block;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.live-person-who span {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.live-person-reach {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Square, so the two of them read as a pair of controls rather than as
+   two more sentences to read. 44px is the floor for a tap target. */
+.icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 15px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  background: var(--cream);
+}
+
+/* The number plate, which is the thing actually being searched for in a
+   line of traffic. Monospaced so the characters are picked apart easily. */
+.live-plate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 13px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.live-plate small {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.live-plate strong {
+  font-family: "Space Mono", monospace;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+
+/* --- the two stops --- */
+
+.live-stops {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style: none;
+}
+
+.live-stops li {
+  position: relative;
+  padding-bottom: 14px;
+}
+
+.live-stops li:last-child {
+  padding-bottom: 0;
+}
+
+/* The dot for each stop, and the line joining them. */
+.live-stops li::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: -22px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--white);
+}
+
+.live-stops li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 17px;
+  bottom: 2px;
+  left: -17px;
+  width: 2px;
+  background: var(--line);
+}
+
+.live-stops .is-now::before {
+  background: var(--coral-dark);
+}
+
+.live-stops .is-done::before {
+  background: var(--sage);
+}
+
+.live-stops small {
+  display: block;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.live-stops strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* --- the numbers --- */
+
+.live-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1.5px solid var(--line);
+}
+
+/* Calling off a ride someone is already driving towards is not a thing to
+   sit next to the buttons used every trip. Last, and quiet, but not
+   hidden — and never the same shape as the primary action. */
+.live-cancel {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--coral-dark);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.live-cancel:hover:not(:disabled) {
+  border-color: var(--coral-dark);
+  background: rgba(232, 115, 137, 0.08);
+}
+
+.live-cancel:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Below this the two columns stop being two columns: the map takes a
+   fixed slice of the screen and the sheet rides underneath it, tucked up
+   over the map's bottom edge the way a real sheet sits. */
+@media (max-width: 900px) {
+  .live-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .live-map {
+    height: 46vh;
+    min-height: 300px;
+  }
+
+  .live-sheet {
+    position: relative;
+    z-index: 2;
+    max-height: none;
+    margin-top: -20px;
+    overflow: visible;
+    border-radius: 20px 20px 18px 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .live-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .live-do {
+    flex-wrap: wrap;
+  }
+
+  .live-do-alt {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* =========================================================
+   RIDES NEAR YOU
+   One line of the rides passing closest to where you are, read off
+   the board the app already polls. A line rather than a grid: it is a
+   glance at what is nearby, and the full board is one tap away.
+   ========================================================= */
+
+.nearby {
+  margin-bottom: 26px;
+}
+
+.nearby-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.nearby-head h2 {
+  margin: 4px 0 2px;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.nearby-where {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  margin: 0;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nearby-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nearby-refresh,
+.nearby-all {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--white);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nearby-all {
+  background: var(--butter);
+}
+
+.nearby-refresh:hover:not(:disabled),
+.nearby-all:hover {
+  transform: translateY(-1px);
+}
+
+.nearby-refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The line. Scrolls sideways within itself — never the page — and snaps
+   so a flick lands on a card rather than halfway across two. */
+.nearby-line {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(250px, 270px);
+  gap: 12px;
+  padding: 4px 4px 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.nearby-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 218px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  background: var(--white);
+  box-shadow: 4px 5px 0 rgba(43, 38, 34, 0.12);
+  scroll-snap-align: start;
+}
+
+/* Placeholders while the location comes back, the same size as the real
+   cards, so the page does not jump when they arrive. */
+.nearby-card--ghost {
+  border-style: dashed;
+  border-color: var(--line);
+  background: linear-gradient(
+    100deg,
+    var(--paper) 30%,
+    var(--cream) 50%,
+    var(--paper) 70%
+  );
+  background-size: 300% 100%;
+  box-shadow: none;
+  animation: nearby-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes nearby-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nearby-card--ghost {
+    animation: none;
+  }
+}
+
+.nearby-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nearby-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--ink);
+  border-radius: 11px;
+  background: var(--cream);
+}
+
+.nearby-card-who {
+  flex: 1;
+  min-width: 0;
+}
+
+.nearby-card-who strong {
+  display: block;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nearby-card-who span {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+/* The number this whole strip is sorted by, so it is the one that stands
+   out on each card. */
+.nearby-away {
+  flex: none;
+  padding: 4px 9px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--lavender-light);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Pickup then dropoff, one line each: long place names are cut rather
+   than allowed to make one card taller than its neighbours. The full name
+   is on hover. */
+.nearby-stops {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The dot lives inside the item's own padding, not hung off its left
+   edge: the item clips its overflow to cut long names short, and a marker
+   outside the box is clipped along with them. */
+.nearby-stops li {
+  position: relative;
+  overflow: hidden;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nearby-stops li::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sage);
+}
+
+.nearby-stops li:last-child::before {
+  background: var(--coral-dark);
+}
+
+.nearby-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.nearby-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--line);
+}
+
+.nearby-fare {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.nearby-request {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--coral);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nearby-request:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* Anything that is not an open seat: stated, not offered. */
+.nearby-request:disabled {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  cursor: default;
+}
+
+.nearby-request--accepted:disabled {
+  border-color: var(--sage);
+  background: var(--sage-light);
+  color: var(--ink);
+}
+
+.nearby-empty {
+  padding: 18px;
+  border: 1.5px dashed var(--ink);
+  border-radius: 14px;
+  background: var(--white);
+}
+
+.nearby-empty p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.nearby-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* A driver's queue, empty, said as a footnote beneath the rides. */
+.requests-quiet {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1.5px solid var(--line);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@media (max-width: 520px) {
+  .nearby-head {
+    align-items: flex-start;
+  }
+
+  .nearby-controls {
+    width: 100%;
+  }
+
+  .nearby-refresh,
+  .nearby-all {
+    flex: 1;
+  }
+
+  .nearby-line {
+    grid-auto-columns: 82%;
+  }
+}
+
+/* =========================================================
+   WHAT A SEAT COSTS
+   Worked out by the server from the route and the vehicle. The driver
+   has no say in it, which is the reason it can be stated this plainly.
+   ========================================================= */
+
+.ride-fare {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--sage-light);
+}
+
+.ride-fare strong {
+  font-size: 20px;
+  line-height: 1;
+
+  /* Tabular figures: a column of prices that shifts as the digits change
+     reads as sloppy, and these sit in lists. */
+  font-variant-numeric: tabular-nums;
+}
+
+.ride-fare span {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* In a list row rather than at the end of a card: quieter, because the
+   decision has already been made by the time anyone sees it there. */
+.ride-fare--inline {
+  margin: 10px 0 0;
+  padding: 7px 11px;
+  border-width: 1.5px;
+  border-radius: 999px;
+  background: var(--white);
+}
+
+.ride-fare--inline strong {
+  font-size: 15px;
+}
+
+/* The detail page has room to say where the number came from. A price
+   nobody may argue with has to be able to show its working. */
+.fare-explainer {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--ink);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.fare-explainer strong {
+  display: block;
+  margin-bottom: 4px;
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.fare-explainer span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* =========================================================
+   MESSAGES AND REPORTS
+   Two things a shared ride needs that a phone number does not cover:
+   saying which gate you meant, and saying when it went wrong.
+   ========================================================= */
+
+/* The message button carries a count, so it needs somewhere to put it. */
+.icon-button--badge {
+  position: relative;
+}
+
+.icon-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--coral-dark);
+  color: var(--white);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--cream);
+  overflow: hidden;
+}
+
+.chat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1.5px solid var(--line);
+  background: var(--white);
+}
+
+.chat-head strong {
+  font-size: 13px;
+}
+
+.chat-head span {
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Tall enough to hold a short exchange, capped so the thread never pushes
+   the trip details off the sheet. */
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 210px;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-empty {
+  margin: auto;
+  padding: 0 12px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Theirs on the left, yours on the right — the arrangement every thread
+   uses, and the only thing that says who wrote what without a label. */
+.chat-bubble {
+  align-self: flex-start;
+  max-width: 82%;
+  padding: 7px 11px;
+  border: 1.5px solid var(--ink);
+  border-radius: 13px 13px 13px 4px;
+  background: var(--white);
+}
+
+.chat-bubble--mine {
+  align-self: flex-end;
+  border-radius: 13px 13px 4px 13px;
+  background: var(--lavender-light);
+}
+
+/* Sent, not yet acknowledged by the server. */
+.chat-bubble--pending {
+  opacity: 0.6;
+}
+
+.chat-bubble p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble span {
+  display: block;
+  margin-top: 2px;
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.chat-compose {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1.5px solid var(--line);
+  background: var(--white);
+}
+
+.chat-compose input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+
+  /* 16px keeps iOS from zooming the page on focus. */
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.chat-compose input:focus {
+  outline: 2px solid var(--lavender);
+  outline-offset: 1px;
+}
+
+.chat-compose button {
+  flex: none;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--butter);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-compose button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Cancel and report: the two things nobody wants to need, kept together
+   and away from the buttons that drive the trip forward. */
+.live-quiet {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* --- the report form --- */
+
+.report-modal {
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow: 8px 10px 0 rgba(43, 38, 34, 0.18);
+}
+
+.report-modal h2 {
+  margin: 6px 0 4px;
+  font-size: 24px;
+}
+
+.report-intro {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.report-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.report-reason {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.report-reason:hover {
+  border-color: var(--ink);
+}
+
+.report-reason.selected {
+  border: 2px solid var(--ink);
+  background: var(--butter-light);
+}
+
+/* Already filed: shown rather than hidden, so it is clear the first
+   report landed instead of the option simply vanishing. */
+.report-reason.is-filed {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.report-reason span {
+  flex: 1;
+}
+
+.report-reason small {
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.report-details {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.report-details small {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.report-details textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.report-details textarea:focus {
+  outline: 2px solid var(--lavender);
+  outline-offset: 1px;
+}
+
+/* An emergency is not a form. Said plainly, and last, where it is read on
+   the way out rather than skimmed past on the way in. */
+.report-urgent {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1.5px solid var(--line);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--coral-dark);
+}
+
+/* =========================================================
    LIVE TRACKING
    Two legs, two lines: getting to the pickup point, then the ride
    itself. Telling them apart is how someone drives the right route.
    ========================================================= */
 
-.live-steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
 
-.live-steps button {
-  flex: 1;
-  min-width: 130px;
-  min-height: 44px;
-  font-size: 11px;
-}
 
 .live-phase--moving {
   background: var(--lavender, #e6e1f7);
+}
+
+/* The one thing the driver is being asked to do next. Sits directly above
+   the button that does it — a prompt on the other side of the screen from
+   its own control is a prompt nobody connects to anything. */
+.live-ask {
+  margin: 0 0 10px;
+  padding: 11px 14px;
+  border: 2px dashed var(--ink);
+  border-radius: 14px;
+  background: var(--white);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 /* The car a rider is watching, as opposed to the rider themselves. */
@@ -4358,6 +5423,71 @@ button {
 }
 
 /* The message a waiting rider is looking for, on the trips list. */
+/* --- the trip that is happening right now ------------------------------
+   A journey already under way is the one thing on My Trips that cannot
+   wait, and closing the live map used to leave no way back to it. It sits
+   above the tabs, on both of them, and reopens the map in one tap. */
+
+.live-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 0 22px;
+  padding: 18px 22px;
+  background: linear-gradient(105deg, #fff6d8, #fffdf9 70%);
+  border: 1px solid #f0d98a;
+  border-radius: 13px;
+  box-shadow: 0 8px 22px rgba(43, 38, 34, 0.06);
+}
+
+.live-now > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.live-now strong {
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.live-now-where {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-now .primary-button {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 46px;
+  padding: 0 22px;
+}
+
+/* The same trip, further down the list. Marked so the eye lands on it
+   without having to read every card. */
+.trip-card--live {
+  border-color: #f0d98a;
+  background: linear-gradient(105deg, #fffbee, #fffdf9 60%);
+}
+
+@media (max-width: 650px) {
+  .live-now {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .live-now .primary-button {
+    width: 100%;
+  }
+}
+
 .arrived-badge {
   display: inline-block;
   margin: 8px 0 0;

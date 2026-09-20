@@ -7,6 +7,7 @@ import {
   plateProblem,
   phoneProblem,
 } from "./lib/vehicles";
+import VehicleIcon from "./VehicleIcon";
 
 export default function ProfileSetup({ onBack, onComplete }) {
   const [vehicle, setVehicle] = useState("none");
@@ -145,7 +146,9 @@ export default function ProfileSetup({ onBack, onComplete }) {
                     className={`role-option ${vehicle === option.value ? "selected" : ""}`}
                     onClick={() => setVehicle(option.value)}
                   >
-                    <span className="role-icon">{option.icon}</span>
+                    <span className="role-icon">
+                      <VehicleIcon vehicle={option.value} size={30} />
+                    </span>
                     <strong>{option.title}</strong>
                     <small>{option.note}</small>
                   </button>

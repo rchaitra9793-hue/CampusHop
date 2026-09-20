@@ -1,6 +1,7 @@
 import React from "react";
 import RouteMap from "./RouteMap";
 import { formatDistance, formatDuration } from "./lib/geo";
+import { formatFare, fareNote, FARE_EXPLAINER } from "./lib/fare";
 
 export default function RideDetails({ trip, onBack }) {
   if (!trip) {
@@ -16,6 +17,7 @@ export default function RideDetails({ trip, onBack }) {
 
   const distance = formatDistance(trip.distanceMeters);
   const duration = formatDuration(trip.durationSeconds);
+  const fare = formatFare(trip.fare);
 
   return (
     <main className="page-shell">
@@ -54,7 +56,25 @@ export default function RideDetails({ trip, onBack }) {
                 <strong>{duration}</strong>
               </div>
             )}
+
+            {fare && (
+              <div>
+                <small>YOUR SHARE</small>
+                <strong>{fare}</strong>
+              </div>
+            )}
           </div>
+        )}
+
+        {/* Room here to say where the number comes from, which the card on
+            the board has no space for. */}
+        {fare && (
+          <p className="fare-explainer">
+            <strong>
+              {fare} · {fareNote(trip.fare)}
+            </strong>
+            <span>{FARE_EXPLAINER}</span>
+          </p>
         )}
       </section>
 

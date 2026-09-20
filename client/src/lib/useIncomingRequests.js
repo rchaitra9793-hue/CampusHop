@@ -1,57 +1,39 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { departed } from "./rideState";
 
 // The driver is not sitting on the Requests tab waiting, so this polls
 // from the dashboard shell instead — often enough to feel live, rarely
 // enough to stay cheap.
 const POLL_MS = 8000;
 
-const seenKey = (userId) => `campushop.seenRequests.${userId || "anon"}`;
-
-function readSeen(userId) {
-  try {
-    const raw = localStorage.getItem(seenKey(userId));
-    return raw ? { set: new Set(JSON.parse(raw)), first: false } : { set: new Set(), first: true };
-  } catch {
-    // Private browsing, or storage disabled. Alerts still work for the
-    // life of the page; they just cannot be remembered across a reload.
-    return { set: new Set(), first: true };
-  }
-}
-
-function writeSeen(userId, set) {
-  try {
-    localStorage.setItem(seenKey(userId), JSON.stringify([...set]));
-  } catch {
-    // Nothing to do — see above.
-  }
-}
 
 /**
  * The driver's incoming requests, polled once for the whole app.
  *
- * Returns the list, plus `alerts`: requests that have appeared since this
- * driver last looked. Which ones those are has to survive a reload, so
- * the ids already announced are kept in local storage — otherwise every
- * refresh would re-announce the same pending requests.
+ * Returns the list, plus `alerts`: every request still waiting on an
+ * answer. A rider is left planning their morning around a seat nobody
+ * has confirmed, so an alert is not an announcement that can be missed
+ * once and lost — it stands until the driver accepts or declines, and it
+ * is there again on every sign-in, reload and return to the page.
  *
- * On the very first run for an account there is no record of what has
- * been seen, so the current queue is marked read silently rather than
- * firing a popup per request already sitting in the Requests tab.
+ * Dismissing one sets it aside for the current page only. That is
+ * deliberately not remembered: the rider is still waiting either way, so
+ * the next visit surfaces it again.
  */
 export function useIncomingRequests(userId) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [alerts, setAlerts] = useState([]);
 
-  const seenRef = useRef(null);
+  // Requests the driver has waved away on this page. Held in memory on
+  // purpose — a reload or a fresh sign-in brings them all back.
+  const [setAside, setSetAside] = useState(() => new Set());
 
-  // Reset when the account changes, so one user's read state is never
-  // applied to another's queue.
+  // Reset when the account changes, so one driver's queue is never shown
+  // to another.
   useEffect(() => {
-    seenRef.current = null;
-    setAlerts([]);
+    setSetAside(new Set());
     setRequests([]);
     setLoading(true);
   }, [userId]);
@@ -65,43 +47,15 @@ export function useIncomingRequests(userId) {
 
         setRequests(incoming);
         setError("");
-
-        const pending = incoming.filter((r) => r.status === "pending");
-
-        if (seenRef.current === null) {
-          const { set, first } = readSeen(userId);
-          seenRef.current = set;
-
-          if (first) {
-            // Nothing has ever been announced to this account. Treat the
-            // existing queue as already read.
-            const seeded = new Set(pending.map((r) => r.id));
-            seenRef.current = seeded;
-            writeSeen(userId, seeded);
-            return;
-          }
-        }
-
-        const fresh = pending.filter((r) => !seenRef.current.has(r.id));
-
-        if (fresh.length > 0) {
-          fresh.forEach((r) => seenRef.current.add(r.id));
-          setAlerts((current) => [...current, ...fresh]);
-        }
-
-        // Forget ids that no longer exist, so the record cannot grow
-        // without bound over a term of use.
-        const live = new Set(incoming.map((r) => r.id));
-        seenRef.current = new Set([...seenRef.current].filter((id) => live.has(id)));
-
-        writeSeen(userId, seenRef.current);
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     },
-    [userId]
+    // The endpoint resolves the driver from the caller's token, so this
+    // does not vary with userId; the effect below re-runs on a change.
+    []
   );
 
   useEffect(() => {
@@ -130,7 +84,12 @@ export function useIncomingRequests(userId) {
     async (id, status) => {
       try {
         await api.requests.setStatus(id, status);
-        setAlerts((current) => current.filter((a) => a.id !== id));
+
+        // The reload below drops it from `alerts` anyway once the server
+        // reports the new status; setting it aside now avoids the card
+        // lingering for the length of that round trip.
+        setSetAside((current) => new Set(current).add(id));
+
         await load(true);
       } catch (err) {
         setError(err.message);
@@ -142,8 +101,28 @@ export function useIncomingRequests(userId) {
   );
 
   const dismiss = useCallback((id) => {
-    setAlerts((current) => current.filter((a) => a.id !== id));
+    setSetAside((current) => new Set(current).add(id));
   }, []);
 
-  return { requests, loading, error, alerts, answer, dismiss, refresh: load };
+  // Standing, not announced: derived from what the server says is still
+  // pending, so nothing is lost to a missed render or a closed tab. It
+  // stops standing once the ride it concerns has departed.
+  const alerts = requests.filter(
+    (r) => r.status === "pending" && !setAside.has(r.id) && !departed(r.ride)
+  );
+
+  const withExpiry = requests.map((r) => ({
+    ...r,
+    expired: r.status === "pending" && departed(r.ride),
+  }));
+
+  return {
+    requests: withExpiry,
+    loading,
+    error,
+    alerts,
+    answer,
+    dismiss,
+    refresh: load,
+  };
 }

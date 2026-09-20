@@ -260,9 +260,6 @@ export function formatClock(minutes) {
   return `${display}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
-/** Default catchment for the "near me" filter. */
-export const NEARBY_RADIUS_M = 2000;
-
 /**
  * How far a point is from a ride, in metres.
  *
@@ -287,24 +284,18 @@ export function distanceToRide(point, ride) {
 }
 
 /**
- * Annotate rides with their distance from `point` and whether they fall
- * inside `radius`.
+ * Annotate rides with their distance from `point`.
  *
- * Nothing is dropped here — the caller decides whether to hide the far
- * ones, so it can still report how many were filtered out.
+ * Distance is information, never a gate: every ride stays on the board
+ * however far away it starts, and the rider decides what is too far.
  */
-export function withProximity(rides, point, radius = NEARBY_RADIUS_M) {
+export function withProximity(rides, point) {
   if (!point) {
-    return rides.map((ride) => ({ ...ride, distanceFromMe: null, nearby: true }));
+    return rides.map((ride) => ({ ...ride, distanceFromMe: null }));
   }
 
-  return rides.map((ride) => {
-    const meters = distanceToRide(point, ride);
-
-    return {
-      ...ride,
-      distanceFromMe: meters,
-      nearby: meters != null && meters <= radius,
-    };
-  });
+  return rides.map((ride) => ({
+    ...ride,
+    distanceFromMe: distanceToRide(point, ride),
+  }));
 }

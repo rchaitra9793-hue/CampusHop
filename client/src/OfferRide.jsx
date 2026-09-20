@@ -4,6 +4,20 @@ import AddressInput from "./AddressInput";
 import RouteMap from "./RouteMap";
 import { computeRoute, formatDistance, formatDuration } from "./lib/geo";
 
+/**
+ * Today, as the browser's own calendar sees it.
+ *
+ * Deliberately not toISOString().slice(0, 10) — that is UTC, so anywhere
+ * ahead of it (India included) would call it yesterday for the first
+ * hours of the morning and let a driver post a ride into the past.
+ */
+function todayLocal() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export default function OfferRide({ onPostRide }) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
@@ -18,8 +32,10 @@ export default function OfferRide({ onPostRide }) {
   const [route, setRoute] = useState(null);
   const [routing, setRouting] = useState(false);
 
+  // A ride is being offered now, so today is the sensible starting point
+  // and anything earlier is not offerable at all.
   const [form, setForm] = useState({
-    date: "",
+    date: todayLocal(),
     time: "",
     seats: "2",
     vehicle: "car",
@@ -72,7 +88,7 @@ export default function OfferRide({ onPostRide }) {
     setPickupPlace(null);
     setDropoffPlace(null);
     setRoute(null);
-    setForm({ date: "", time: "", seats: "2", vehicle: "car" });
+    setForm({ date: todayLocal(), time: "", seats: "2", vehicle: "car" });
   };
 
   const submitRide = async (e) => {
@@ -81,6 +97,20 @@ export default function OfferRide({ onPostRide }) {
 
     if (!pickupPlace || !dropoffPlace) {
       setError("Pick both locations from the suggestions so we can map the route.");
+      return;
+    }
+
+    // The date picker's `min` stops the obvious case; a typed date still
+    // gets here, and a time earlier today is a past departure too.
+    const departure = new Date(`${form.date}T${form.time || "23:59"}`);
+
+    if (Number.isNaN(departure.getTime())) {
+      setError("Pick a departure date and time.");
+      return;
+    }
+
+    if (departure.getTime() < Date.now()) {
+      setError("That departure has already passed. Pick a later date or time.");
       return;
     }
 
@@ -225,6 +255,7 @@ export default function OfferRide({ onPostRide }) {
                     type="date"
                     name="date"
                     value={form.date}
+                    min={todayLocal()}
                     onChange={handleChange}
                     required
                   />

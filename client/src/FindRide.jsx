@@ -10,9 +10,15 @@ import {
   reverseGeocode,
 } from "./lib/geo";
 import { api } from "./lib/api";
-import { NEARBY_RADIUS_M, WEIGHTS } from "./lib/match";
+import { WEIGHTS } from "./lib/match";
+import { upcoming } from "./lib/rideState";
 
-const RADIUS_OPTIONS = [1000, 2000, 5000, 10000];
+// How often the board re-checks itself against the clock. The API decides
+// what is on the board and this page re-fetches whenever the dashboard's
+// poll turns up something new, so this is only for the ride that runs out
+// while nothing else changes — a page left open across an 08:00 departure
+// should not still be offering the 08:00 seat at 08:04.
+const EXPIRY_TICK_MS = 30000;
 
 export default function FindRide({ rides, onRequest, initialSearch, pendingRideId = null }) {
   const [requested, setRequested] = useState(null);
@@ -22,13 +28,11 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
   const [arriveBy, setArriveBy] = useState(initialSearch?.arriveBy ?? "08:30");
   const [vehicle, setVehicle] = useState("any");
 
-  // Where the rider actually is, from the browser. Rides are filtered to
-  // those whose route passes within `radius` of this point.
+  // Where the rider actually is, from the browser. Used to order the
+  // board by how close each ride passes — never to hide one.
   const [myLocation, setMyLocation] = useState(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
-  const [nearbyOnly, setNearbyOnly] = useState(true);
-  const [radius, setRadius] = useState(NEARBY_RADIUS_M);
 
   const [myRoute, setMyRoute] = useState(null);
   const [routing, setRouting] = useState(false);
@@ -112,15 +116,15 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
 
   // --- results, ranked by the server ------------------------------------
 
-  const [board, setBoard] = useState({ rides: [], total: 0, hidden: 0, searched: false });
+  const [board, setBoard] = useState({ rides: [], total: 0, searched: false });
   const [loadingBoard, setLoadingBoard] = useState(true);
   const [boardError, setBoardError] = useState("");
 
   const searching = Boolean(fromPlace && toPlace);
 
-  // Ranking, proximity filtering and the reliability signal are all
-  // computed by the API. The client sends what the rider asked for and
-  // renders the order it gets back.
+  // Ranking, distance and the reliability signal are all computed by the
+  // API, which returns every ride. The client sends what the rider asked
+  // for and renders the order it gets back.
   useEffect(() => {
     let cancelled = false;
 
@@ -137,8 +141,6 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
           vehicle: vehicle === "any" ? undefined : vehicle,
           lat: myLocation?.lat,
           lng: myLocation?.lng,
-          radius,
-          nearbyOnly: myLocation && nearbyOnly ? "true" : undefined,
         });
 
         if (!cancelled) {
@@ -148,7 +150,7 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
       } catch (err) {
         if (!cancelled) {
           setBoardError(err.message);
-          setBoard({ rides: [], total: 0, hidden: 0, searched: false });
+          setBoard({ rides: [], total: 0, searched: false });
         }
       } finally {
         if (!cancelled) setLoadingBoard(false);
@@ -160,11 +162,22 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
     return () => {
       cancelled = true;
     };
-  }, [rides, fromPlace, toPlace, arriveBy, vehicle, myLocation, radius, nearbyOnly]);
+  }, [rides, fromPlace, toPlace, arriveBy, vehicle, myLocation]);
 
-  const visible = board.rides;
-  const filtering = Boolean(myLocation && nearbyOnly);
-  const hiddenCount = board.hidden;
+  // Re-renders on a timer so a ride that reaches its departure while this
+  // page is open drops off it, rather than waiting for the next search or
+  // a reload to notice.
+  const [, setClock] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), EXPIRY_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  // The API has already ended the board at each ride's departure; this is
+  // the same rule applied to the copy this page is holding, which was true
+  // when it arrived and goes stale by the second.
+  const visible = upcoming(board.rides);
 
   const best = searching ? visible[0] : null;
 
@@ -227,8 +240,6 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
     setHighlighted(null);
   };
 
-  const radiusLabel = `${(radius / 1000).toFixed(radius % 1000 ? 1 : 0)} km`;
-
   return (
     <main className="page-shell">
 
@@ -243,8 +254,8 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
           </h1>
 
           <p>
-            We show rides passing within {radiusLabel} of where you are, then
-            rank them by how well they fit your commute.
+            Every ride on the board, ranked by how well it fits your
+            commute — however far away it sets off.
           </p>
         </div>
       </section>
@@ -262,28 +273,6 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
               {myLocation.accuracy && ` · ±${Math.round(myLocation.accuracy)} m`}
             </span>
 
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={nearbyOnly}
-                onChange={(e) => setNearbyOnly(e.target.checked)}
-              />
-              <span>Only rides within</span>
-            </label>
-
-            <select
-              className="radius-select"
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              disabled={!nearbyOnly}
-            >
-              {RADIUS_OPTIONS.map((m) => (
-                <option key={m} value={m}>
-                  {m / 1000} km
-                </option>
-              ))}
-            </select>
-
             <button
               type="button"
               className="text-button"
@@ -297,7 +286,7 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
         {!locating && !myLocation && (
           <>
             <span className="location-state location-state--off">
-              {locationError || "Location off — showing every ride."}
+              {locationError || "Location off — rides won't be sorted by distance."}
             </span>
 
             <button type="button" className="text-button" onClick={() => locate()}>
@@ -403,7 +392,7 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
             )}
 
             <div>
-              <small>{filtering ? `WITHIN ${radiusLabel}` : "RIDES ON BOARD"}</small>
+              <small>RIDES ON BOARD</small>
               <strong>{visible.length}</strong>
             </div>
           </div>
@@ -413,14 +402,10 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
       <section className="matches-header">
         <div>
           <span className="eyebrow">
-            {searching ? "RANKED FOR YOU" : filtering ? "NEAR YOU" : "TODAY'S ROUTES"}
+            {searching ? "RANKED FOR YOU" : "TODAY'S ROUTES"}
           </span>
           <h2>
-            {searching
-              ? "Best matches for you."
-              : filtering
-                ? `Rides within ${radiusLabel}.`
-                : "Every route on campus."}
+            {searching ? "Best matches for you." : "Every route on campus."}
           </h2>
         </div>
 
@@ -452,17 +437,9 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
           <section className="empty-trips">
             <div className="empty-sticker">HOP</div>
 
-            <h2>
-              {filtering && board.total > 0
-                ? `No rides within ${radiusLabel}.`
-                : "No rides posted yet."}
-            </h2>
+            <h2>No rides posted yet.</h2>
 
-            <p>
-              {filtering && board.total > 0
-                ? `${board.total} ride${board.total === 1 ? "" : "s"} exist further away. Widen the radius to see them.`
-                : "Once someone offers a ride, it will show up here."}
-            </p>
+            <p>Once someone offers a ride, it will show up here.</p>
           </section>
         )}
 
@@ -484,20 +461,6 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
         ))}
 
       </section>
-
-      {hiddenCount > 0 && (
-        <p className="filter-note">
-          {hiddenCount} ride{hiddenCount === 1 ? "" : "s"} hidden — further than{" "}
-          {radiusLabel} from you.{" "}
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => setNearbyOnly(false)}
-          >
-            Show all
-          </button>
-        </p>
-      )}
 
       {requested && !requested.isMine && !requested.myRequestStatus && (
         <div className="modal-backdrop" onClick={() => setRequested(null)}>

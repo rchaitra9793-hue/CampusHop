@@ -1,20 +1,15 @@
 // One definition of the vehicles this app knows about, shared by the
 // signup form, the prompt for existing accounts, and the live ride map.
-// They have to agree: the symbol a rider watches move on the map is the
-// same choice the driver made at signup.
+// They have to agree: the vehicle a rider watches move on the map is the
+// same choice the driver made at signup. The drawings themselves live in
+// `vehicleIcons.js`, keyed on the values below.
 
 export const VEHICLES = [
-  { value: "none", icon: "🚶", title: "No vehicle", note: "I'll find rides" },
-  { value: "bike", icon: "🏍️", title: "Bike", note: "I can offer rides" },
-  { value: "scooty", icon: "🛵", title: "Scooty", note: "I can offer rides" },
-  { value: "car", icon: "🚗", title: "Car", note: "I can offer rides" },
+  { value: "none", title: "No vehicle", note: "I'll find rides" },
+  { value: "bike", title: "Bike", note: "I can offer rides" },
+  { value: "scooty", title: "Scooty", note: "I can offer rides" },
+  { value: "car", title: "Car", note: "I can offer rides" },
 ];
-
-/** The symbol for a vehicle, however the value happens to be cased. */
-export function vehicleIcon(vehicle) {
-  const key = String(vehicle || "").toLowerCase();
-  return VEHICLES.find((v) => v.value === key)?.icon || "🚗";
-}
 
 /**
  * Number plates vary by state and people write them a dozen ways. Match

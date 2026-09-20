@@ -1,9 +1,71 @@
 const express = require("express");
 const { db } = require("../db");
 const { computeRoute } = require("../geo");
-const { rankRides, withProximity, minutesOfDay, NEARBY_RADIUS_M } = require("../match");
+const { rankRides, withProximity, minutesOfDay } = require("../match");
+const { fareDetail } = require("../pricing");
+const { departureInstant, departureIso, stillUpcoming } = require("../expiry");
 
 const router = express.Router();
+
+/**
+ * Every ride that has not left yet, newest first.
+ *
+ * The board ends at the departure the driver chose. A seat in a car that
+ * has already gone is not a seat, and leaving one on the board means a
+ * rider can request it, a driver can be emailed about it, and the whole
+ * search can be ranked around a trip nobody can take.
+ *
+ * Filtered in the query, against the indexed `departs_at` column that
+ * db/008_ride_expiry.sql adds — so an old ride is never loaded, ranked or
+ * serialised, rather than being fetched and then dropped. Rows whose
+ * departure could not be parsed into that column are kept deliberately:
+ * losing a real ride to a parsing quirk is worse than showing an odd one.
+ *
+ * The second pass is not redundant. It catches rides that expired between
+ * the trigger last running and now on a database still waiting for the
+ * migration, and it is what makes the filter hold on a database where 008
+ * has not been run at all — the branch below falls back to an unfiltered
+ * read exactly once, then says so.
+ */
+let hasDepartsAtColumn = null;
+
+async function fetchUpcomingRides() {
+  const board = () =>
+    db.from("rides").select("*").order("created_at", { ascending: false });
+
+  if (hasDepartsAtColumn !== false) {
+    const { data, error } = await board().or(
+      `departs_at.gte.${new Date().toISOString()},departs_at.is.null`
+    );
+
+    if (!error) {
+      hasDepartsAtColumn = true;
+      return stillUpcoming(data || []);
+    }
+
+    // 42703 is "no such column": the migration has not been run here.
+    const missingColumn =
+      error.code === "42703" || /departs_at/i.test(error.message || "");
+
+    if (!missingColumn) throw error;
+
+    if (hasDepartsAtColumn !== false) {
+      hasDepartsAtColumn = false;
+
+      console.warn(
+        "\n  db/008_ride_expiry.sql has not been run on this database.\n" +
+          "  Departed rides are being filtered by the API server instead,\n" +
+          "  which is correct but reads the whole table. Run the migration.\n"
+      );
+    }
+  }
+
+  const { data, error } = await board();
+
+  if (error) throw error;
+
+  return stillUpcoming(data || []);
+}
 
 /**
  * Database row -> the shape the client renders.
@@ -35,6 +97,11 @@ function toRide(row, completedByDriver = {}, context = {}) {
     time: row.time,
     seats: row.seats,
 
+    // The departure as an instant, so the browser is never left parsing a
+    // date and a time of its own and reaching a different answer about
+    // whether this ride has gone.
+    departsAt: departureIso(row),
+
     pickupLat: row.pickup_lat,
     pickupLng: row.pickup_lng,
     dropoffLat: row.dropoff_lat,
@@ -43,6 +110,12 @@ function toRide(row, completedByDriver = {}, context = {}) {
     routeGeometry: row.route_geometry,
     distanceMeters: row.distance_meters,
     durationSeconds: row.duration_seconds,
+
+    // Worked out from the measured route, every time it is asked for.
+    // There is no price column and the driver never sends one: a fare
+    // that could be set by the person collecting it is not a fare, it is
+    // an asking price.
+    fare: fareDetail(row.vehicle, row.distance_meters),
 
     tripStatus: row.trip_status || "scheduled",
 
@@ -150,24 +223,22 @@ function numberOr(value, fallback) {
 /**
  * GET /api/rides
  *
- * The search endpoint. Filtering by proximity and ranking by match
- * quality both happen here, so the ordering the rider sees is decided by
- * the server rather than assembled in the browser.
+ * The search endpoint. Ranking by match quality happens here, so the
+ * ordering the rider sees is decided by the server rather than assembled
+ * in the browser.
+ *
+ * Distance never removes a ride from the board — every ride is returned
+ * and the rider judges for themselves whether one starts too far away.
+ *
+ * Time does. A ride is returned until the moment it departs and never
+ * afterwards, so a reload cannot bring back yesterday's board.
  *
  * Query: fromLat, fromLng, toLat, toLng, arriveBy (HH:MM), vehicle,
- *        lat, lng (the rider's current position), radius (metres),
- *        nearbyOnly ("true" to drop rides outside the radius)
+ *        lat, lng (the rider's current position)
  */
 router.get("/", async (req, res, next) => {
   try {
-    const { data, error } = await db
-      .from("rides")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    const rows = data || [];
+    const rows = await fetchUpcomingRides();
 
     const [counts, context] = await Promise.all([
       completedCounts(rows),
@@ -192,12 +263,10 @@ router.get("/", async (req, res, next) => {
     const here =
       q.lat && q.lng ? { lat: Number(q.lat), lng: Number(q.lng) } : null;
 
-    const radius = numberOr(q.radius, NEARBY_RADIUS_M);
-
     const searched = Boolean(criteria.pickup && criteria.dropoff);
 
     const ranked = rankRides(rides, criteria);
-    const withDistance = withProximity(ranked, here, radius);
+    const withDistance = withProximity(ranked, here);
 
     // rankRides orders by match score, but that only means something once
     // a route was given. Browsing from a known position is ordered by how
@@ -208,14 +277,9 @@ router.get("/", async (req, res, next) => {
       );
     }
 
-    const nearbyOnly = q.nearbyOnly === "true" && here;
-    const visible = nearbyOnly ? withDistance.filter((r) => r.nearby) : withDistance;
-
     res.json({
-      rides: visible,
+      rides: withDistance,
       total: withDistance.length,
-      hidden: withDistance.length - visible.length,
-      radius,
       searched,
     });
   } catch (err) {
@@ -275,6 +339,32 @@ router.post("/", async (req, res, next) => {
       return res.status(400).json({ error: "Seats must be between 1 and 6." });
     }
 
+    // A ride into the past helps nobody. The form already blocks it; this
+    // is the copy that cannot be edited by whoever is holding the browser.
+    //
+    // Checked as an instant rather than a date, which it could not be
+    // before: the campus's timezone is configuration now, so the server
+    // can work out exactly when "today at 08:00" is rather than allowing
+    // a day of slack to cover not knowing. That slack mattered more once
+    // the board started ending at the departure time — a ride posted for
+    // nine hours ago would otherwise be accepted, stored, and then never
+    // appear anywhere, which looks like the post silently failing.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: "Date must be in YYYY-MM-DD form." });
+    }
+
+    const departsAt = departureInstant({ date, time });
+
+    if (departsAt == null) {
+      return res.status(400).json({ error: "That date and time is not a real departure." });
+    }
+
+    if (departsAt < Date.now()) {
+      return res
+        .status(400)
+        .json({ error: "That departure has already passed. Pick a later date or time." });
+    }
+
     // Computed here, not accepted from the client.
     const route = await computeRoute(pickup, dropoff);
 
@@ -328,6 +418,19 @@ router.delete("/:id", async (req, res, next) => {
     if (ride.driver_id !== req.user.id) {
       return res.status(403).json({ error: "You can only remove your own rides." });
     }
+
+    // The requests on it go too. Whether the database cascades this
+    // depends on how it was originally created, and the rows left behind
+    // when it does not are worse than useless: a rider's trip list ends up
+    // holding a seat on a journey that no longer has a route, a time or a
+    // driver, and no screen can do anything with it. Removing them here
+    // makes the outcome the same on every database.
+    const { error: requestError } = await db
+      .from("trip_requests")
+      .delete()
+      .eq("ride_id", req.params.id);
+
+    if (requestError) throw requestError;
 
     const { error } = await db.from("rides").delete().eq("id", req.params.id);
 

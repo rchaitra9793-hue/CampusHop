@@ -6,6 +6,7 @@ import {
   plateProblem,
   phoneProblem,
 } from "./lib/vehicles";
+import VehicleIcon from "./VehicleIcon";
 
 /**
  * Asks an existing account for the details signup now collects.
@@ -113,7 +114,9 @@ export default function VehiclePrompt({ user, onSave, onSkip }) {
               className={`role-option ${vehicle === option.value ? "selected" : ""}`}
               onClick={() => setVehicle(option.value)}
             >
-              <span className="role-icon">{option.icon}</span>
+              <span className="role-icon">
+                <VehicleIcon vehicle={option.value} size={30} />
+              </span>
               <strong>{option.title}</strong>
               <small>{option.note}</small>
             </button>

@@ -1,13 +1,44 @@
 import React, { useState } from "react";
 
 /**
- * Ride requests announced wherever the driver happens to be.
+ * Ride requests standing wherever the driver happens to be.
  *
  * A request is time-sensitive — someone is waiting on an answer to plan
  * their morning — and the driver has no reason to be sitting on the
  * Requests tab when one arrives. So it is answerable from here, on any
  * page, without losing whatever they were in the middle of.
+ *
+ * These do not time out. A card stays until it is accepted or declined,
+ * or until the ride it concerns has departed.
  */
+
+/** "just now", "12 min ago", "3 hours ago" — how long a rider has waited. */
+function waitedFor(iso) {
+  if (!iso) return null;
+
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+/** The clock time it was sent, so "2 hours ago" has something exact behind it. */
+function sentAt(iso) {
+  if (!iso) return null;
+
+  return new Date(iso).toLocaleString([], {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 export default function RequestAlerts({
   alerts,
   onAnswer,
@@ -50,7 +81,7 @@ export default function RequestAlerts({
             ×
           </button>
 
-          <span className="eyebrow">NEW RIDE REQUEST</span>
+          <span className="eyebrow">RIDE REQUEST · WAITING ON YOU</span>
 
           <div className="request-alert-person">
             <div className="avatar">{r.riderName?.slice(0, 2).toUpperCase()}</div>
@@ -69,6 +100,11 @@ export default function RequestAlerts({
 
           <div className="request-alert-when">
             {r.ride?.date} · {r.ride?.time} · {r.seatsLeft} of {r.seats} seats left
+          </div>
+
+          <div className="request-alert-sent">
+            Asked {waitedFor(r.createdAt)}
+            <span>{sentAt(r.createdAt)}</span>
           </div>
 
           <div className="modal-actions">

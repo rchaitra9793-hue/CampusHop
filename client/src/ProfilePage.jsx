@@ -5,8 +5,8 @@ import {
   normalisePlate,
   phoneProblem,
   plateProblem,
-  vehicleIcon,
 } from "./lib/vehicles";
+import VehicleIcon from "./VehicleIcon";
 
 /**
  * Your own details, and a place to fill in what is missing.
@@ -179,7 +179,9 @@ export default function ProfilePage({ user, onSave }) {
                 className={`role-option ${vehicle === option.value ? "selected" : ""}`}
                 onClick={() => setVehicle(option.value)}
               >
-                <span className="role-icon">{option.icon}</span>
+                <span className="role-icon">
+                  <VehicleIcon vehicle={option.value} size={30} />
+                </span>
                 <strong>{option.title}</strong>
                 <small>{option.note}</small>
               </button>
@@ -217,7 +219,9 @@ export default function ProfilePage({ user, onSave }) {
               </label>
 
               <div className="profile-preview">
-                <span className="live-vehicle-icon">{vehicleIcon(vehicle)}</span>
+                <span className="live-vehicle-icon">
+                  <VehicleIcon vehicle={vehicle} size={26} />
+                </span>
 
                 <div>
                   <small>RIDERS WILL LOOK FOR</small>

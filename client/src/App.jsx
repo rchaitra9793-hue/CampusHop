@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
@@ -17,9 +17,11 @@ import IncomingRequests from "./IncomingRequests";
 import RequestAlerts from "./RequestAlerts";
 import VehiclePrompt from "./VehiclePrompt";
 import LiveRide from "./LiveRide";
+import NearbyRides from "./NearbyRides";
 import RequestWaiting from "./RequestWaiting";
 import ProfilePage from "./ProfilePage";
 import { useIncomingRequests } from "./lib/useIncomingRequests";
+import { upcoming } from "./lib/rideState";
 import { needsDetails } from "./lib/vehicles";
 
 // Cycled so a board of rides keeps the pinned-note look.
@@ -29,6 +31,11 @@ const ROTATIONS = ["-0.8deg", "0.6deg", "-0.4deg"];
 // The tabs worth returning to. `rideDetails` is deliberately absent: it
 // needs a trip picked in memory, so restoring it would land on an empty
 // page. It falls back to the list it was opened from.
+// A ride posted in another session is an event this browser is never
+// told about, so the board is re-read on a timer — the same way incoming
+// requests and live trips already are.
+const BOARD_POLL_MS = 8000;
+
 const TABS = ["home", "find", "offer", "trips", "requests", "profile"];
 const TAB_KEY = "campushop.tab";
 
@@ -149,19 +156,48 @@ function Dashboard({ user, onLogout, onUserChange }) {
   // The request the rider is currently watching for an answer to.
   const [waitingOn, setWaitingOn] = useState(null);
 
-  // The board shown on the dashboard. Ranking and filtering happen in the
-  // API; here we just ask for everything and paint it.
+  // The board shown on the dashboard. Ranking happens in the API; here we
+  // just ask for everything and paint it.
+  const boardSignature = useRef(null);
+
   const loadRides = useCallback(async () => {
     try {
-      const { rides: rows } = await api.rides.list();
+      const { rides: board } = await api.rides.list();
 
-      setRides(
-        rows.map((ride, i) => ({
-          ...ride,
-          accent: ACCENTS[i % ACCENTS.length],
-          rotation: ROTATIONS[i % ROTATIONS.length],
-        }))
+      // The API already ends the board at each ride's departure, so this
+      // takes out only what expired since the response was written — and,
+      // more to the point, what expires while this tab sits open between
+      // polls. Filtered here rather than on each screen so every one of
+      // them is working from the same list: the dashboard board, the
+      // nearby strip and the Find page all read this.
+      const rows = upcoming(board);
+
+      // Publishing a new array on every tick would restart the Find page's
+      // own fetch each time, so the board is only replaced when something
+      // actually moved. Route geometry is left out — it never changes for
+      // a ride that already exists.
+      const signature = JSON.stringify(
+        rows.map((r) => [
+          r.id,
+          r.seatsLeft,
+          r.tripStatus,
+          r.myRequestStatus,
+          r.time,
+          r.date,
+        ])
       );
+
+      if (signature !== boardSignature.current) {
+        boardSignature.current = signature;
+
+        setRides(
+          rows.map((ride, i) => ({
+            ...ride,
+            accent: ACCENTS[i % ACCENTS.length],
+            rotation: ROTATIONS[i % ROTATIONS.length],
+          }))
+        );
+      }
 
       setRidesError("");
     } catch (err) {
@@ -171,6 +207,21 @@ function Dashboard({ user, onLogout, onUserChange }) {
 
   useEffect(() => {
     loadRides();
+
+    const timer = setInterval(loadRides, BOARD_POLL_MS);
+
+    // Polling a backgrounded tab is wasted; coming back to it should show
+    // the current board immediately rather than after the next tick.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadRides();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [loadRides]);
 
   // Re-fetch rather than splicing a local copy, so what is on screen is
@@ -508,6 +559,21 @@ function Dashboard({ user, onLogout, onUserChange }) {
     onAnswer={incoming.answer}
     onAccepted={(request) =>
       openLive(request.ride?.id, "driver", request.riderName, request.id)
+    }
+    // The same journey, reopened later. Accepting opens the live map
+    // once; this is how the driver gets back to it afterwards.
+    onOpenLive={(request) =>
+      openLive(request.ride?.id, "driver", request.riderName, request.id)
+    }
+    nearby={
+      // The same board the Find tab uses, and the same request flow: asking
+      // from here opens the same waiting screen as asking from there.
+      <NearbyRides
+        rides={rides}
+        onRequest={requestRide}
+        pendingRideId={pendingRideId}
+        onBrowseAll={() => setActiveTab("find")}
+      />
     }
   />
 )}

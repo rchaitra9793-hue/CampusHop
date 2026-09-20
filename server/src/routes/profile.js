@@ -139,6 +139,10 @@ router.patch("/", async (req, res, next) => {
       return res.status(400).json({ error: "Nothing to update." });
     }
 
+    // Backfills the address for anyone whose profile was created before
+    // the column existed. From the token, so it is always theirs.
+    if (req.user.email) patch.email = req.user.email;
+
     const { data, error } = await db
       .from("profiles")
       .update(patch)
@@ -201,6 +205,12 @@ router.post("/", async (req, res, next) => {
           id: req.user.id,
           name: String(name).trim(),
           role: role === "faculty" ? "faculty" : "student",
+
+          // Taken from the verified token, never from the request body,
+          // so nobody can aim their notifications at another address.
+          // Notifications need to reach the *other* person, and
+          // auth.users is not readable without the service-role key.
+          email: req.user.email ?? null,
         },
         { onConflict: "id" }
       )

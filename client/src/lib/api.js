@@ -69,8 +69,8 @@ export const api = {
 
   rides: {
     /**
-     * The search endpoint. Ranking and the nearby filter are applied by
-     * the server; the client only renders what comes back.
+     * The search endpoint. Ranking is applied by the server, which
+     * returns every ride; the client only renders what comes back.
      */
     list: (params) => request("/rides", { params }),
     get: (id) => request(`/rides/${id}`).then((r) => r.ride),
@@ -98,6 +98,28 @@ export const api = {
     // Either side calling it off. Frees the seat and lets the rider ask
     // again later, which a "cancelled" status would not.
     cancel: (id) => request(`/requests/${id}`, { method: "DELETE" }),
+  },
+
+  // Talking to the person you are travelling with, without either of you
+  // handing over a phone number. A thread exists only on an accepted
+  // request, so only ever between two people already sharing a ride.
+  messages: {
+    list: (tripId) => request(`/requests/${tripId}/messages`),
+
+    send: (tripId, body) =>
+      request(`/requests/${tripId}/messages`, { method: "POST", body: { body } }),
+
+    // One call for every thread, so a badge costs one request rather
+    // than one per trip.
+    unread: () => request("/requests/unread"),
+  },
+
+  // Reporting a trip that went wrong. Either side can file one, and the
+  // server decides who it is about — the client never names a subject.
+  reports: {
+    create: (body) => request("/reports", { method: "POST", body }),
+    mine: () => request("/reports/mine").then((r) => r.reports),
+    forTrip: (tripId) => request(`/reports/for/${tripId}`).then((r) => r.reports),
   },
 
   geo: {
