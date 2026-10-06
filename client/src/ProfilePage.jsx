@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Stars from "./Stars";
+import { api } from "./lib/api";
 import {
   VEHICLES,
   normalisePhone,
@@ -23,6 +25,34 @@ export default function ProfilePage({ user, onSave }) {
   const [vehicleNumber, setVehicleNumber] = useState(user?.vehicleNumber || "");
   const [capacity, setCapacity] = useState(String(user?.capacity || 1));
 
+  // An administrator has no vehicle, no pickup point and no rating,
+  // because they are not on the board — so this page is their name, the
+  // address they sign in with, and what they are. Everything else below
+  // belongs to somebody who actually shares rides.
+  const admin = user?.isAdmin === true;
+
+  // What people who rode with you thought. Somebody being scored by
+  // strangers is owed sight of the result — and of the words, which come
+  // back without a name on them.
+  const [standing, setStanding] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (admin) return undefined;
+
+    api.ratings
+      .mine()
+      .then((r) => !cancelled && setStanding(r))
+      .catch(() => {
+        // A database without 010 has nothing to report here.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [admin]);
+
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -32,9 +62,12 @@ export default function ProfilePage({ user, onSave }) {
   // What this account is still missing. Worth saying plainly rather than
   // leaving someone to notice an empty field.
   const gaps = [];
-  if (!user?.phone) gaps.push("a phone number");
-  if (user?.vehicle && user.vehicle !== "none" && !user?.vehicleNumber) {
-    gaps.push("a vehicle number");
+
+  if (!admin) {
+    if (!user?.phone) gaps.push("a phone number");
+    if (user?.vehicle && user.vehicle !== "none" && !user?.vehicleNumber) {
+      gaps.push("a vehicle number");
+    }
   }
 
   const submit = async (e) => {
@@ -42,6 +75,26 @@ export default function ProfilePage({ user, onSave }) {
 
     if (!name.trim()) {
       setError("Name cannot be empty.");
+      return;
+    }
+
+    // An administrator's form has one field on it. Validating a phone
+    // number it never asked for, and then sending whatever happened to be
+    // in state, is how a save fails over something nobody can see.
+    if (admin) {
+      setError("");
+      setSaved(false);
+      setSaving(true);
+
+      try {
+        await onSave({ name: name.trim() });
+        setSaved(true);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setSaving(false);
+      }
+
       return;
     }
 
@@ -92,16 +145,33 @@ export default function ProfilePage({ user, onSave }) {
         <div>
           <span className="eyebrow">YOUR PROFILE</span>
 
-          <h1>
-            The details
-            <br />
-            <em>people go on.</em>
-          </h1>
+          {admin ? (
+            <>
+              <h1>
+                Your account,
+                <br />
+                <em>and nothing more.</em>
+              </h1>
 
-          <p>
-            How you appear on the board, and how the person you are matched
-            with reaches you.
-          </p>
+              <p>
+                You administer CampusHop rather than ride on it, so there is
+                no vehicle, pickup point or rating to keep here.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1>
+                The details
+                <br />
+                <em>people go on.</em>
+              </h1>
+
+              <p>
+                How you appear on the board, and how the person you are
+                matched with reaches you.
+              </p>
+            </>
+          )}
         </div>
       </section>
 
@@ -129,31 +199,38 @@ export default function ProfilePage({ user, onSave }) {
             />
           </label>
 
-          <label>
-            Phone number
-            <input
-              type="tel"
-              autoComplete="tel"
-              placeholder="e.g. +91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
-            <span className="field-note">
-              Shared only with the driver or rider you are matched with —
-              never shown on the ride board.
-            </span>
-          </label>
+          {/* A phone number is for the person you are travelling with to
+              reach you, and a pickup point is where they find you. An
+              administrator has neither. */}
+          {!admin && (
+            <>
+              <label>
+                Phone number
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="e.g. +91 98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+                <span className="field-note">
+                  Shared only with the driver or rider you are matched with —
+                  never shown on the ride board.
+                </span>
+              </label>
 
-          <label>
-            Default pickup point
-            <input
-              type="text"
-              placeholder="e.g. Hostel Block C"
-              value={pickupPoint}
-              onChange={(e) => setPickupPoint(e.target.value)}
-            />
-          </label>
+              <label>
+                Default pickup point
+                <input
+                  type="text"
+                  placeholder="e.g. Hostel Block C"
+                  value={pickupPoint}
+                  onChange={(e) => setPickupPoint(e.target.value)}
+                />
+              </label>
+            </>
+          )}
 
           <div className="profile-readonly">
             <div>
@@ -163,11 +240,49 @@ export default function ProfilePage({ user, onSave }) {
 
             <div>
               <small>ROLE</small>
-              <strong>{user?.role || "student"}</strong>
+              {/* The privilege, not the student/faculty label underneath
+                  it: "administrator" is the answer to what this account
+                  is, and the one the account holder is looking for. */}
+              <strong>{admin ? "administrator" : user?.role || "student"}</strong>
             </div>
+
+            {!admin && (
+              <div>
+                <small>YOUR RATING</small>
+                <strong>
+                  {standing?.average != null ? (
+                    <Stars value={standing.average} count={standing.count} />
+                  ) : (
+                    <span className="stars stars--none">Not rated yet</span>
+                  )}
+                </strong>
+              </div>
+            )}
           </div>
         </section>
 
+        {/* The comments, if there are any. Shown without names: a rating
+            with "waited ten minutes at the gate" is useful, and knowing
+            which of last week's riders wrote it turns it into a thing to
+            settle rather than a thing to learn from. */}
+        {!admin && standing?.received?.some((r) => r.comment) && (
+          <section className="profile-card">
+            <h3>What people said</h3>
+
+            <ul className="rating-comments">
+              {standing.received
+                .filter((r) => r.comment)
+                .map((r) => (
+                  <li key={r.id}>
+                    <Stars value={r.stars} size="small" />
+                    <p>{r.comment}</p>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        )}
+
+        {!admin && (
         <section className="profile-card">
           <h3>What you drive</h3>
 
@@ -237,6 +352,7 @@ export default function ProfilePage({ user, onSave }) {
             </p>
           )}
         </section>
+        )}
 
         {error && <p className="form-error">{error}</p>}
 

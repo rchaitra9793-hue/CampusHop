@@ -264,11 +264,94 @@ button {
   color: #aaa099;
 }
 
+/* --- password box, with the show/hide toggle ---
+   The eye sits inside the field rather than beside it, so the
+   row is still one control at a glance and the input keeps the
+   full width the other fields have. */
+
+.password-field {
+  position: relative;
+}
+
+.password-field > small {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.password-box {
+  position: relative;
+  display: block;
+}
+
+/* Room for the button, so a long password does not run under it. */
+.auth-form .password-box input {
+  padding-right: 46px;
+}
+
+.password-peek {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  transform: translateY(-50%);
+  border-radius: 8px;
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.password-peek:hover {
+  color: var(--ink);
+  background: rgba(43, 38, 34, 0.06);
+}
+
+/* Revealed is a state worth seeing at a glance, since it means
+   the password is on screen. */
+.password-peek[aria-pressed="true"] {
+  color: var(--coral-dark);
+}
+
+.password-peek:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 1px;
+}
+
 .form-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: -4px;
+}
+
+/* With "Remember me" gone the row holds one link, which belongs
+   on the right where it already was rather than stretched across. */
+.form-row--end {
+  justify-content: flex-end;
+}
+
+/* Why you are looking at the sign-in form when you did not ask
+   for it: you just registered, or just changed your password.
+   Sage rather than coral — this is good news, and the red-pink
+   in this palette is what an error uses. */
+.auth-notice {
+  margin: -6px 0 18px;
+  padding: 11px 14px;
+  border: 1px solid var(--sage);
+  border-radius: 10px;
+  background: var(--sage-light);
+  color: #3c5128;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 .checkbox-label {
@@ -5423,6 +5506,95 @@ button {
 }
 
 /* The message a waiting rider is looking for, on the trips list. */
+/* --- settling up, once the trip is over ---------------------------------
+   The total is the headline and the halves sit under it, because the
+   total is what makes the halves checkable rather than merely stated. */
+
+.settle-up {
+  margin: 0 0 20px;
+  padding: 20px 22px;
+  background: linear-gradient(105deg, #eef7ee, #fffdf9 75%);
+  border: 1px solid #bcd9bc;
+  border-radius: 13px;
+}
+
+.settle-total {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0 16px;
+}
+
+.settle-total small,
+.settle-halves small {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.settle-total strong {
+  font-size: 38px;
+  line-height: 1;
+}
+
+.settle-total span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+}
+
+.settle-halves {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 4px;
+  border-top: 1px dashed #bcd9bc;
+}
+
+.settle-halves > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settle-halves strong {
+  font-family: "Space Mono", monospace;
+  font-size: 20px;
+}
+
+/* Which half is yours. Two identical numbers side by side is exactly the
+   moment to say which one you are looking at. */
+.settle-halves .is-you strong {
+  color: var(--coral-dark);
+}
+
+.settle-divider {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.settle-action {
+  margin: 14px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settle-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 650px) {
+  .settle-total strong {
+    font-size: 32px;
+  }
+}
+
 /* --- the trip that is happening right now ------------------------------
    A journey already under way is the one thing on My Trips that cannot
    wait, and closing the live map used to leave no way back to it. It sits
@@ -5524,3 +5696,1467 @@ button {
     animation: none;
   }
 }
+
+/* =========================================================
+   ADMINISTRATION
+   =========================================================
+   The dashboard behind the Admin tab. It reuses .page-shell,
+   .page-heading, .trip-tabs and the button styles above — an
+   admin screen that looks like a different application is one
+   more thing to learn for no reason. What is new here is the
+   counts strip, the report card, and the account list. */
+
+.admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.admin-tiles--quiet {
+  margin-bottom: 24px;
+}
+
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+button.admin-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--coral);
+}
+
+.admin-tile strong {
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.admin-tile span {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* An unanswered report is the one thing on this page that is not
+   simply information, so it is the one thing coloured. */
+.admin-tile--urgent {
+  border-color: var(--coral);
+  background: #fff1f4;
+}
+
+.admin-tiles--quiet .admin-tile strong {
+  font-size: 20px;
+}
+
+.admin-nav {
+  margin-bottom: 16px;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-report {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+/* Open reports read down the left edge at a glance. */
+.admin-report--open {
+  border-left-color: var(--coral);
+}
+
+.admin-report--reviewing {
+  border-left-color: var(--butter);
+}
+
+.admin-report--resolved {
+  border-left-color: var(--sage);
+}
+
+.admin-report--dismissed {
+  border-left-color: var(--line);
+}
+
+.admin-report header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-report header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-report header strong {
+  font-size: 16px;
+}
+
+.admin-report header time {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.admin-report blockquote {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--blush);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.admin-report--compact {
+  padding: 14px;
+}
+
+.admin-status {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--line);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-status--open {
+  color: #7d2537;
+  background: #ffd9e1;
+}
+
+.admin-status--reviewing {
+  color: #6b5200;
+  background: var(--butter-light);
+}
+
+.admin-status--resolved {
+  color: #42552f;
+  background: var(--sage-light);
+}
+
+.admin-report-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 14px;
+}
+
+.admin-report-people .text-button {
+  font-weight: 700;
+}
+
+.admin-route {
+  margin: 0;
+  font-size: 14px;
+}
+
+.admin-muted {
+  color: var(--muted);
+}
+
+/* A standing fact about an account — suspended, administrator —
+   not a status that moves. */
+.admin-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffd9e1;
+  color: #7d2537;
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-actions textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.admin-actions textarea:focus {
+  outline: 2px solid var(--coral);
+  outline-offset: -1px;
+}
+
+.admin-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* These buttons sit side by side, so they size to their label
+   rather than filling the row the way .primary-button does. */
+.admin-action-row .primary-button,
+.admin-action-row .secondary-button,
+.admin-action-row .danger-button,
+.admin-actions > .primary-button,
+.admin-actions > .secondary-button,
+.admin-actions > .danger-button {
+  width: auto;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.admin-search {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-search > input {
+  flex: 1;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font: inherit;
+}
+
+.admin-search label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.admin-users {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-user {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease;
+}
+
+.admin-user:hover {
+  transform: translateY(-1px);
+  border-color: var(--coral);
+}
+
+.admin-user--suspended {
+  background: var(--blush);
+  opacity: 0.75;
+}
+
+.admin-user > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-user strong {
+  font-size: 15px;
+}
+
+.admin-user span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-user-flags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+}
+
+.admin-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-detail h3 {
+  margin: 10px 0 0;
+  font-size: 15px;
+}
+
+.admin-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.admin-detail-head h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.admin-detail-head p {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.admin-facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 0;
+}
+
+.admin-facts dt {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.admin-facts dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.admin-banner {
+  padding: 14px 16px;
+  border: 1px solid var(--coral);
+  border-radius: 12px;
+  background: #fff1f4;
+}
+
+.admin-banner p {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.admin-plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-plain-list li {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 14px;
+}
+
+.admin-plain-list li p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-audit li strong {
+  font-family: "Space Mono", monospace;
+  font-size: 13px;
+}
+
+/* A phone is a plausible place to read the queue from — a report
+   does not wait for somebody to be at a desk. */
+@media (max-width: 720px) {
+  .admin-tiles,
+  .admin-facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-search {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-user {
+    grid-template-columns: auto 1fr;
+  }
+
+  .admin-user-flags {
+    grid-column: 2;
+  }
+
+  .admin-report header {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+/* =========================================================
+   RATINGS
+   =========================================================
+   The stars, in both their jobs: the read-only average on a
+   ride card, and the five buttons in the rating form. They
+   have to look like the same thing, so they share a class
+   and differ only by .stars--pick. */
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+}
+
+/* A driver nobody has rated gets words, not five empty stars.
+   Five empty stars reads as nought out of five, which is a
+   verdict, and the point is that there is not one yet. */
+.stars--none {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* One star, built from two layers: a grey one underneath and a
+   coloured one clipped to a width. That is what lets 4.3 show
+   as four stars and a bit rather than rounding to four. */
+.star {
+  position: relative;
+  display: inline-block;
+  color: var(--line);
+  font-size: 14px;
+}
+
+.star-empty {
+  color: var(--line);
+}
+
+.star-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  color: var(--butter);
+  white-space: nowrap;
+}
+
+.stars-value {
+  margin-left: 5px;
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.stars-value small {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.stars--small .star {
+  font-size: 12px;
+}
+
+.stars--small .stars-value {
+  font-size: 10px;
+}
+
+.stars--big .star {
+  font-size: 34px;
+}
+
+/* The clickable version. Whole stars only — half a star is a
+   thing to read, not a thing to pick. */
+.stars--pick {
+  gap: 4px;
+}
+
+.star--pick {
+  padding: 0;
+  background: none;
+  color: var(--line);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    color 120ms ease;
+}
+
+.star--pick.is-on {
+  color: var(--butter);
+}
+
+.star--pick:hover {
+  transform: scale(1.15);
+}
+
+.star--pick:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* --- the rating panel on the end-of-ride screen ---
+   Sits under the fare split, in the same card language: this is
+   the last thing on a screen somebody is already reading, not a
+   form they had to go and find. */
+
+.rate-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 20px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  text-align: center;
+}
+
+.rate-panel h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+/* What the number they just picked actually means. A scale where
+   only the ends are labelled leaves the middle to guess at.
+   Fixed height so the panel does not jump as it changes. */
+.rate-panel-meaning {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rate-panel textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.rate-panel textarea:focus {
+  outline: 2px solid var(--coral);
+  outline-offset: -1px;
+}
+
+.rate-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.rate-panel-actions .primary-button {
+  flex: 1;
+  min-height: 46px;
+  justify-content: center;
+}
+
+/* --- once it has been given ---
+   A row, not a column: the verdict is a fact to glance at now,
+   and the way to change it should not look like the main thing
+   on the screen. */
+
+.rate-panel--done {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  text-align: left;
+}
+
+.rate-panel--done > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rate-panel-said {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* --- where a rating shows up --- */
+
+/* Under a name, on a ride card and in a request queue. */
+.rider-info .stars,
+.trip-person .stars {
+  margin-top: 3px;
+}
+
+/* "You rated this ★★★★" on a finished trip. */
+.trip-rated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.trip-meta-rating {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The comments on your own profile, without names attached. */
+.rating-comments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rating-comments li {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--blush);
+}
+
+.rating-comments li p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* The profile's own standing sits in the read-only grid, where
+   every other cell is a line of bold text. */
+.profile-readonly .stars {
+  font-weight: 400;
+}
+
+@media (max-width: 720px) {
+  .stars--big .star {
+    font-size: 30px;
+  }
+
+  /* The saved row stacks rather than squeezing the Change link
+     against the stars. */
+  .rate-panel--done {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* =========================================================
+   ADMINISTRATION — filters, rides, roles
+   =========================================================
+   Added alongside the original admin block above rather than
+   replacing it: the tiles, report cards and account rows are
+   unchanged, and everything here is built on the same pieces. */
+
+/* A labelled row of filter pills. Reuses .trip-tabs, so a
+   filter on this page looks like the tab controls everywhere
+   else rather than like a third kind of button. */
+.admin-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.admin-filter > .eyebrow {
+  flex-shrink: 0;
+  width: 64px;
+}
+
+.admin-filter .trip-tabs {
+  flex: 1;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+/* A number carried on a filter or a tab. */
+.admin-count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--ink);
+  font-family: "Space Mono", monospace;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.admin-count--urgent {
+  background: var(--coral);
+  color: var(--ink);
+}
+
+/* The denominator on the rides tile: 3 of 41, where only the 3
+   is the number anybody acts on. */
+.admin-tile-of {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.admin-tile--flagged {
+  border-color: var(--butter);
+  background: var(--butter-light);
+}
+
+.admin-result-count {
+  margin: 0 0 10px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+}
+
+/* --- the decision on a report ---
+   Set apart from the complaint above it: one is what somebody
+   said happened, the other is what was done about it. */
+.admin-decision {
+  padding: 12px 14px;
+  border-left: 3px solid var(--sage);
+  border-radius: 0 10px 10px 0;
+  background: var(--sage-light);
+}
+
+.admin-decision p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* --- the account actions ---
+   Boxed, because this is the one group of controls on the page
+   that changes what a person can do. */
+.admin-actions--boxed {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+.admin-flag--admin {
+  background: var(--lavender-light);
+  color: #4a3d7a;
+}
+
+.admin-flag--you {
+  background: var(--butter-light);
+  color: #6b5200;
+}
+
+/* --- rides --- */
+
+.admin-ride {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--sage);
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+/* A ride that has left is history, and reads quieter than one
+   somebody could still join. */
+.admin-ride--gone {
+  border-left-color: var(--line);
+  background: var(--blush);
+}
+
+.admin-ride header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-ride header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-ride header strong {
+  font-size: 16px;
+}
+
+.admin-ride header time {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.admin-ride-facts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.admin-ride-facts > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-ride-facts small {
+  color: var(--muted);
+  font-family: "Space Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.admin-ride-facts strong {
+  font-size: 14px;
+  text-transform: capitalize;
+}
+
+.admin-ride-facts .text-button {
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Said before the irreversible thing is done, not after. */
+.admin-warn {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--coral);
+  border-radius: 10px;
+  background: #fff1f4;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* --- selects, matching the search input beside them --- */
+
+.admin-search select {
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.admin-search select:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: -1px;
+}
+
+/* --- the audit log ---
+   Colour-coded down the left edge by what was touched, so a run
+   of entries can be skimmed by kind without reading the verbs. */
+
+.admin-audit li {
+  border-left: 3px solid var(--line);
+}
+
+.admin-audit--report {
+  border-left-color: var(--butter);
+}
+
+.admin-audit--user {
+  border-left-color: var(--lavender);
+}
+
+.admin-audit--ride {
+  border-left-color: var(--sage);
+}
+
+.admin-audit-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-audit-head .text-button,
+.admin-audit-head span {
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-audit li .admin-muted {
+  display: block;
+  margin-top: 2px;
+  font-family: "Space Mono", monospace;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .admin-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .admin-filter > .eyebrow {
+    width: auto;
+  }
+
+  .admin-ride-facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-ride header {
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+/* =========================================================
+   ADMINISTRATORS
+   =========================================================
+   The panel behind the icon on the dashboard heading. Rare
+   work — appointing somebody happens once a term — so it is
+   not a tab competing with the queue read daily. */
+
+/* The heading grows a right-hand slot for the icon. */
+.page-heading--admin {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-team-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--paper);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.admin-team-button:hover {
+  color: var(--ink);
+  border-color: var(--coral);
+  transform: translateY(-1px);
+}
+
+.admin-team-button:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
+/* How many there are, which is the thing worth knowing at a
+   glance: one administrator is a single point of failure. */
+.admin-team-button em {
+  font-family: "Space Mono", monospace;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* --- the panel --- */
+
+.admin-team {
+  max-width: 520px;
+}
+
+.admin-team-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-team-head h2 {
+  margin: 4px 0 0;
+}
+
+.admin-team-head .text-button {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.admin-team-list {
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-team-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.admin-team-who {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-team-who strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.admin-team-who span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Removing somebody is the destructive one, so it reads as a
+   link until it is pressed rather than as a standing button. */
+.admin-team-remove {
+  flex-shrink: 0;
+  color: var(--coral-dark);
+  font-weight: 700;
+}
+
+.admin-team-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-team-confirm input {
+  flex: 1;
+  min-width: 140px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--white);
+  font: inherit;
+  font-size: 13px;
+}
+
+.admin-team-confirm .danger-button {
+  width: auto;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* --- appointing somebody --- */
+
+.admin-team-add {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--blush);
+}
+
+.admin-team-add > input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+}
+
+.admin-team-add input:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: -1px;
+}
+
+.admin-team-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.admin-team-results li.admin-muted {
+  padding: 8px 2px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-team-results li button {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.admin-team-results li button:hover {
+  border-color: var(--coral);
+}
+
+.admin-team-results li button strong {
+  font-size: 14px;
+}
+
+.admin-team-results li button span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.admin-team-picked {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-team-picked p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.admin-team-picked input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--white);
+  font: inherit;
+  font-size: 14px;
+}
+
+.admin-team-picked .primary-button {
+  width: auto;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.admin-team-note {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .page-heading--admin {
+    flex-direction: column;
+  }
+
+  .admin-team-list li {
+    flex-wrap: wrap;
+  }
+}
+
+/* --- invitations waiting on a code --- */
+
+.admin-team-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px dashed var(--butter);
+  border-radius: 14px;
+  background: var(--butter-light);
+}
+
+.admin-team-pending ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-team-pending li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-team-pending li > div:first-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.admin-team-pending strong {
+  font-size: 13px;
+}
+
+.admin-team-pending span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-team-pending-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Invite by email, or somebody already on the board. */
+.admin-team-modes {
+  margin: 0 0 2px;
+}
+
+/* The code itself. Spaced out and monospaced, because it is read off
+   somebody else's screen one digit at a time. */
+.admin-team-code {
+  font-family: "Space Mono", monospace !important;
+  font-size: 22px !important;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.admin-team-add > .primary-button {
+  width: auto;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.admin-team-add > .admin-muted {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-team-picked > .admin-muted {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* --- the door to the admin portal ---
+   Styled as a role option so it sits level with Student and
+   Faculty, and dashed so it reads as "leaves here" rather than
+   "a third kind of account". There is no such account: the
+   portal is a separate application that decides for itself. */
+
+.role-option--portal {
+  border-style: dashed;
+}
+
+.role-option--portal:hover {
+  border-color: var(--lavender);
+  background: var(--lavender-light);
+}
+
+.role-option--portal small {
+  color: var(--muted);
+}
+
+/* The picker above the sign-in form. */
+.signin-as {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 19px;
+}
+
+.role-grid--signin .role-option strong {
+  font-size: 12px;
+}
+
+.role-grid--signin .role-option small {
+  font-size: 10px;
+}
+
+/* =========================================================
+   OPERATIONS DASHBOARD (the separate admin project)
+   =========================================================
+   Copied from that project unchanged except for one thing:
+   every selector is scoped under .ops-admin, the wrapper its
+   dashboard is rendered inside.
+
+   That scope is not cosmetic. Eight of its class names are
+   also used by the console in this repo — .admin-count,
+   .admin-search, .admin-status, .admin-ride and four status
+   variants — so without it each screen would restyle the
+   other. The declarations themselves are untouched. */
+/* =========================================================
+   ADMIN OPERATIONS DASHBOARD
+   ========================================================= */
+
+.ops-admin .admin-page { max-width: 1240px; margin: 0 auto; padding: 44px 32px 90px; }
+.ops-admin .admin-header { display:flex; justify-content:space-between; gap:30px; align-items:flex-end; margin-bottom:28px; }
+.ops-admin .admin-header h1 { margin:8px 0 10px; font-family:"Fraunces",serif; font-size:clamp(42px,5vw,68px); line-height:.95; letter-spacing:-.04em; }
+.ops-admin .admin-header p { max-width:680px; margin:0; color:var(--muted); line-height:1.6; }
+.ops-admin .admin-back { width:auto; min-width:180px; }
+.ops-admin .admin-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:18px; }
+.ops-admin .admin-stat { min-height:130px; padding:20px; background:var(--paper); border:1px solid var(--line); box-shadow:3px 4px 0 rgba(43,38,34,.06); }
+.ops-admin .admin-stat strong { display:block; margin-top:18px; font-family:"Fraunces",serif; font-size:42px; line-height:1; }
+.ops-admin .admin-stat.sage { background:var(--sage-light); }
+.ops-admin .admin-stat.butter { background:var(--butter-light); }
+.ops-admin .admin-stat.coral { background:#fff0f2; }
+.ops-admin .admin-stat.lavender { background:var(--lavender-light); }
+.ops-admin .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
+.ops-admin .admin-grid--top { margin-top:0; }
+.ops-admin .admin-panel { background:var(--paper); border:1px solid var(--line); padding:22px; box-shadow:3px 4px 0 rgba(43,38,34,.05); }
+.ops-admin .admin-panel-heading { display:flex; justify-content:space-between; align-items:center; gap:18px; margin-bottom:18px; }
+.ops-admin .admin-panel-heading--wrap { align-items:flex-start; flex-wrap:wrap; }
+.ops-admin .admin-panel h2 { margin:6px 0 0; font-family:"Fraunces",serif; font-size:30px; }
+.ops-admin .admin-count { min-width:36px; height:36px; display:grid; place-items:center; border-radius:50%; background:var(--ink); color:var(--paper); font-family:"Space Mono",monospace; font-size:12px; }
+.ops-admin .admin-alert { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:14px 0; border-top:1px solid var(--line); }
+.ops-admin .admin-alert div, .ops-admin .admin-member div, .ops-admin .admin-ride div { display:flex; flex-direction:column; gap:4px; }
+.ops-admin .admin-alert span, .ops-admin .admin-member span, .ops-admin .admin-ride span, .ops-admin .admin-ride small { color:var(--muted); font-size:12px; }
+.ops-admin .admin-small-button { width:auto; padding:8px 12px; border-radius:8px; background:var(--butter); font-size:11px; font-weight:800; }
+.ops-admin .admin-bars { display:flex; flex-direction:column; gap:13px; }
+.ops-admin .admin-bars div { display:flex; justify-content:space-between; gap:20px; padding:13px 0; border-bottom:1px dashed var(--line); }
+.ops-admin .admin-bars strong { font-family:"Space Mono",monospace; }
+.ops-admin .admin-note { margin:18px 0 0; color:var(--muted); font-size:12px; line-height:1.6; }
+.ops-admin .admin-filter-row { display:flex; flex-wrap:wrap; gap:6px; }
+.ops-admin .admin-filter { padding:8px 11px; border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted); font-size:11px; font-weight:800; text-transform:capitalize; }
+.ops-admin .admin-filter.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.ops-admin .admin-table-wrap { overflow:auto; }
+.ops-admin .admin-table { width:100%; border-collapse:collapse; min-width:850px; }
+.ops-admin .admin-table th { text-align:left; padding:11px 12px; color:var(--muted); font-family:"Space Mono",monospace; font-size:9px; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--line); }
+.ops-admin .admin-table td { padding:14px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:12px; }
+.ops-admin .admin-table td:first-child { min-width:180px; }
+.ops-admin .admin-table td small { display:block; max-width:250px; margin-top:5px; color:var(--muted); line-height:1.4; }
+.ops-admin .admin-table select, .ops-admin .admin-search { border:1px solid var(--line); border-radius:8px; background:var(--blush); color:var(--ink); padding:8px 10px; font-size:11px; }
+.ops-admin .admin-search { width:min(230px,100%); }
+.ops-admin .admin-status { display:inline-flex; width:max-content; padding:5px 8px; border-radius:999px; background:var(--lavender-light); color:var(--ink); font-family:"Space Mono",monospace; font-size:9px; text-transform:capitalize; }
+.ops-admin .admin-status--open, .ops-admin .admin-status--to_pickup { background:#fff0f2; }
+.ops-admin .admin-status--reviewing, .ops-admin .admin-status--arrived { background:var(--butter-light); }
+.ops-admin .admin-status--resolved, .ops-admin .admin-status--completed { background:var(--sage-light); }
+.ops-admin .admin-status--dismissed { background:#eee; }
+.ops-admin .admin-member-list, .ops-admin .admin-ride-list { display:flex; flex-direction:column; }
+.ops-admin .admin-member, .ops-admin .admin-ride { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--line); }
+.ops-admin .admin-member .mini-avatar { flex:0 0 auto; }
+.ops-admin .admin-member > div:nth-child(2) { flex:1; min-width:0; }
+.ops-admin .admin-member-vehicle { font-family:"Space Mono",monospace; text-transform:uppercase; font-size:9px !important; }
+.ops-admin .admin-ride { align-items:flex-start; justify-content:space-between; }
+.ops-admin .admin-ride > div:first-child { min-width:0; }
+.ops-admin .admin-ride > div:first-child strong, .ops-admin .admin-ride > div:first-child span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ops-admin .admin-ride-actions { align-items:flex-end; }
+.ops-admin .admin-danger { padding:6px 9px; border:1px solid #e4b5bd; border-radius:7px; background:#fff4f5; color:#a64a5b; font-size:10px; font-weight:800; }
+.ops-admin .admin-danger:disabled { opacity:.5; }
+.ops-admin .admin-system-panel { margin-top:18px; }
+.ops-admin .admin-capabilities { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.ops-admin .admin-capabilities span { padding:8px 11px; border:1px dashed var(--line); border-radius:999px; background:var(--blush); font-size:11px; font-weight:700; }
+.ops-admin .admin-error { display:flex; justify-content:space-between; gap:15px; align-items:center; margin-bottom:18px; padding:13px 15px; border:1px solid #e4b5bd; background:#fff0f2; color:#8c3e4e; font-size:12px; }
+.ops-admin .admin-error button { background:transparent; font-size:20px; }
+.ops-admin .admin-empty, .ops-admin .admin-loading { padding:24px 0; color:var(--muted); font-size:12px; }
+.ops-admin .admin-loading { max-width:1240px; margin:auto; padding:80px 32px; }
+
+@media (max-width: 900px) {
+  .ops-admin .admin-stats { grid-template-columns:repeat(2,1fr); }
+  .ops-admin .admin-grid { grid-template-columns:1fr; }
+  .ops-admin .admin-header { align-items:flex-start; flex-direction:column; }
+}
+
+@media (max-width: 600px) {
+  .ops-admin .admin-page { padding:28px 16px 60px; }
+  .ops-admin .admin-stats { grid-template-columns:1fr 1fr; }
+  .ops-admin .admin-stat { min-height:105px; padding:15px; }
+  .ops-admin .admin-stat strong { font-size:32px; margin-top:13px; }
+  .ops-admin .admin-panel { padding:17px; }
+  .ops-admin .admin-panel-heading { align-items:flex-start; flex-direction:column; }
+  .ops-admin .admin-search { width:100%; }
+}
+

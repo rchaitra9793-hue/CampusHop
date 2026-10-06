@@ -435,14 +435,178 @@ $$;
 
 
 -- ============================================================
+-- 009 — administration
+-- ============================================================
+--
+-- The privilege, deliberately separate from the `role` column: that one is
+-- picked by the user on the signup form and means student or faculty. A
+-- privilege that can be named in a request body is not a privilege.
+--
+-- `is_admin` has no write path in the API at all. It is set by hand, below.
+
+alter table profiles
+  add column if not exists is_admin boolean not null default false;
+
+create index if not exists profiles_admin_idx
+  on profiles (id) where is_admin;
+
+-- An account that may no longer sign in. A timestamp rather than a boolean
+-- so the record says *when*, which is the first thing anyone asks when a
+-- suspension is appealed.
+
+alter table profiles
+  add column if not exists suspended_at timestamptz;
+
+alter table profiles
+  add column if not exists suspended_reason text;
+
+-- What the admins did. Powers with no record of their use are the part
+-- that becomes impossible to reason about later.
+
+create table if not exists admin_actions (
+  id         uuid primary key default gen_random_uuid(),
+  admin_id   uuid not null references profiles (id) on delete restrict,
+  action     text not null,
+  target_id  uuid,
+  note       text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_actions_recent
+  on admin_actions (created_at desc);
+
+create index if not exists admin_actions_target
+  on admin_actions (target_id, created_at desc);
+
+-- Making the first administrator. There is no endpoint for this on
+-- purpose: an API that can grant administrator is an API that can be made
+-- to grant administrator. Put in your own address and run it.
+--
+--   update profiles set is_admin = true where email = 'you@college.edu';
+
+
+-- ============================================================
+-- 010 — rating the person you travelled with
+-- ============================================================
+--
+-- Like safety_reports in 007, a rating outlives the trip it is about: the
+-- trip row goes a week after it finishes and the ride is swept once it has
+-- departed, but "four stars from eleven people" has to survive both.
+
+create table if not exists trip_ratings (
+  id         uuid primary key default gen_random_uuid(),
+  request_id uuid references trip_requests (id) on delete set null,
+  ride_id    uuid references rides (id) on delete set null,
+  rater_id   uuid not null references profiles (id) on delete cascade,
+  subject_id uuid not null references profiles (id) on delete cascade,
+  stars      smallint not null check (stars between 1 and 5),
+  comment    text,
+  created_at timestamptz not null default now(),
+  constraint trip_ratings_not_self check (rater_id <> subject_id)
+);
+
+create index if not exists trip_ratings_subject
+  on trip_ratings (subject_id);
+
+create index if not exists trip_ratings_rater
+  on trip_ratings (rater_id, created_at desc);
+
+-- One rating per person, per trip, which is what lets the API upsert
+-- rather than insert. Not partial: Postgres cannot infer a partial index
+-- in ON CONFLICT unless the predicate is restated, and a plain unique
+-- index already treats nulls as distinct, so rows whose request_id has
+-- gone null never collide anyway.
+create unique index if not exists trip_ratings_one_per_trip
+  on trip_ratings (rater_id, request_id);
+
+-- The average and the count, per person. A view rather than columns kept
+-- in step by a trigger: the board reads it for every driver at once, and
+-- an average that can drift from the ratings under it is not worth the
+-- speed yet.
+create or replace view profile_ratings as
+  select subject_id,
+         round(avg(stars)::numeric, 2) as rating_avg,
+         count(*)::int                 as rating_count
+    from trip_ratings
+   group by subject_id;
+
+grant select on profile_ratings to anon, authenticated, service_role;
+
+
+-- ============================================================
+-- 011 — the decision, on the report it was about
+-- ============================================================
+--
+-- 009 wrote every status move to admin_actions, which is the right place
+-- for "who did what" and the wrong one for "what was decided about this
+-- report". The decision lives on the report now; the audit row is still
+-- written, because that is the history.
+
+alter table safety_reports
+  add column if not exists resolution text;
+
+alter table safety_reports
+  add column if not exists resolved_at timestamptz;
+
+alter table safety_reports
+  add column if not exists resolved_by uuid references profiles (id) on delete set null;
+
+-- The queue is read as "the open ones, oldest first" on every visit, and
+-- had no index behind it: 007 indexed the other two questions.
+create index if not exists safety_reports_queue
+  on safety_reports (status, created_at);
+
+-- Administration lists rides by driver, newest first, which is not the
+-- order the board reads them in.
+create index if not exists rides_driver_recent
+  on rides (driver_id, created_at desc);
+
+
+-- ============================================================
+-- 012 — appointing an administrator by invitation
+-- ============================================================
+--
+-- An administrator can be anybody with a mailbox: an office account, a
+-- warden, staff on another domain. The .edu.in rule belongs on the signup
+-- form, where it keeps strangers off the ride board — not here. What
+-- stands in its place is a code sent to the address, which turns "somebody
+-- typed this" into "whoever reads that mailbox agreed".
+--
+-- The code itself is never stored; only a salted hash of it.
+
+create table if not exists admin_invites (
+  id          uuid primary key default gen_random_uuid(),
+  email       text not null,
+  invited_by  uuid not null references profiles (id) on delete restrict,
+  reason      text,
+  code_hash   text not null,
+  expires_at  timestamptz not null,
+  attempts    smallint not null default 0,
+  accepted_at timestamptz,
+  accepted_by uuid references profiles (id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists admin_invites_email
+  on admin_invites (email, created_at desc);
+
+create index if not exists admin_invites_open
+  on admin_invites (created_at desc) where accepted_at is null;
+
+
+-- ============================================================
 -- Check it worked
 -- ============================================================
 --
--- Should list: vehicle_number, phone, email, and the ride columns.
+-- Should list: vehicle_number, phone, email, the admin columns, and the
+-- ride columns.
 
 select table_name, column_name
 from information_schema.columns
-where (table_name = 'profiles' and column_name in ('vehicle_number', 'phone', 'email'))
+where (table_name = 'profiles' and column_name in (
+        'vehicle_number', 'phone', 'email',
+        'is_admin', 'suspended_at', 'suspended_reason'
+     ))
    or (table_name = 'rides' and column_name in (
         'pickup_lat', 'pickup_lng', 'dropoff_lat', 'dropoff_lng',
         'route_geometry', 'distance_meters', 'duration_seconds',
@@ -455,7 +619,10 @@ order by table_name, column_name;
 select table_name
 from information_schema.tables
 where table_schema = 'public'
-  and table_name in ('trip_messages', 'safety_reports')
+  and table_name in (
+        'trip_messages', 'safety_reports', 'admin_actions', 'trip_ratings',
+        'admin_invites'
+     )
 order by table_name;
 
 -- Nothing on the board should have a departure in the past.

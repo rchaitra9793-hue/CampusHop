@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import campushopLogo from "./assets/campushop-logo.png";
 import { supabase } from "./supabaseClient";
 import { api } from "./lib/api";
+import PasswordField from "./PasswordField";
 
 export default function RegisterPage({ onBack, onComplete }) {
   const [role, setRole] = useState("student");
@@ -141,18 +142,39 @@ export default function RegisterPage({ onBack, onComplete }) {
                   <strong>Faculty</strong>
                   <small>Find or offer rides</small>
                 </button>
+
+                {/* Not a third kind of account, and deliberately not
+                    selectable. There is no such thing as signing yourself
+                    up as an administrator: this form could not grant it
+                    if it tried, the API clamps the role it accepts to
+                    student or faculty, and neither admin gate reads
+                    anything this page can set. It is shown greyed so the
+                    question "where is Admin?" has a visible answer. */}
+                <button
+                  type="button"
+                  className="role-option role-option--portal"
+                  disabled
+                  title="Administrators are appointed, not self-registered"
+                >
+                  <span className="role-icon">🛠️</span>
+                  <strong>Admin</strong>
+                  <small>Appointed, not self-signed-up</small>
+                </button>
               </div>
+
+              <p className="field-note">
+                Administrator access is granted by an existing administrator
+                — either in the console here, or by adding the address to the
+                operations dashboard's own list. Sign up as a student or
+                faculty member, and it is added to that account.
+              </p>
             </div>
 
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                placeholder="Create a password"
-                required
-              />
-            </label>
+            <PasswordField
+              name="password"
+              placeholder="Create a password"
+              autoComplete="new-password"
+            />
 
             {error && <p className="form-error">{error}</p>}
 

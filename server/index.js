@@ -11,7 +11,7 @@ const express = require("express");
 const cors = require("cors");
 
 const config = require("./src/config");
-const { requireAuth } = require("./src/auth");
+const { requireAuth, requireAdmin } = require("./src/auth");
 const { startRideSweeper } = require("./src/sweepRides");
 
 const ridesRoutes = require("./src/routes/rides").router;
@@ -20,6 +20,19 @@ const requestRoutes = require("./src/routes/requests");
 const geoRoutes = require("./src/routes/geo");
 const profileRoutes = require("./src/routes/profile");
 const requestActionRoutes = require("./src/routes/requestActions");
+// Two administration surfaces, deliberately separate.
+//
+// `admin` is the operations dashboard that arrived as its own project:
+// its own routes, its own gating off ADMIN_EMAILS, and both files left
+// exactly as they came. It keeps /api/admin, so nothing in it had to
+// change to live here.
+//
+// `adminConsole` is the one built in this repo, which reads
+// profiles.is_admin and owns the audit log, suspensions, report
+// decisions and the invitation flow. It moved aside to make room.
+const adminRoutes = require("./src/routes/admin").router;
+const adminConsoleRoutes = require("./src/routes/adminConsole").router;
+const ratingRoutes = require("./src/routes/ratings").router;
 
 const app = express();
 
@@ -66,6 +79,20 @@ app.use("/api/rides", requireAuth, ridesRoutes);
 app.use("/api/requests", requireAuth, requestRoutes);
 app.use("/api/profile", requireAuth, profileRoutes);
 app.use("/api/reports", requireAuth, reportRoutes);
+app.use("/api/ratings", requireAuth, ratingRoutes);
+
+// The operations dashboard, mounted exactly as its own project mounted
+// it: requireAuth only, because its router applies its own requireAdmin
+// on the way in. That gate reads ADMIN_EMAILS and has nothing to do with
+// the column below — the two decide independently, which is the point.
+app.use("/api/admin", requireAuth, adminRoutes);
+
+// The console built here. Two gates, in this order: requireAuth
+// establishes who the caller is from their token, then requireAdmin
+// checks profiles.is_admin. Nothing in here trusts a flag sent by the
+// client — the browser hides the tab for a non-admin, which is a
+// courtesy, not the boundary. This is the boundary.
+app.use("/api/admin-console", requireAuth, requireAdmin, adminConsoleRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ error: `No such endpoint: ${req.method} ${req.originalUrl}` });

@@ -61,6 +61,31 @@ npm run dev          # http://localhost:5173
 
 Then open http://localhost:5173.
 
+### Administration
+
+Two administration screens, one server. Which you see depends on which
+privilege your account holds, and they are independent:
+
+| Screen | Tab | Gated by | Mounted at |
+| --- | --- | --- | --- |
+| Operations dashboard | **Operations** | `ADMIN_EMAILS` in `server/.env` | `/api/admin` |
+| Admin console | **Console** | `profiles.is_admin` | `/api/admin-console` |
+
+The operations dashboard arrived as its own project. Its two server files
+(`src/admin.js`, `src/routes/admin.js`) and its `AdminDashboard.jsx` are
+here byte-for-byte unchanged, which is why it kept `/api/admin` — the
+console moved aside instead. Its stylesheet is copied with every selector
+scoped under `.ops-admin`, because eight of its class names collide with
+the console's.
+
+An account can hold either privilege, both, or neither. Holding one does
+not imply the other: granting `is_admin` does not add anyone to
+`ADMIN_EMAILS`, and being listed there sets no column.
+
+Nobody can self-register as an administrator. The sign-up form clamps the
+role it accepts to student or faculty, and neither gate reads anything
+that form can set.
+
 ### Configuration
 
 `server/.env`
@@ -89,6 +114,7 @@ Then open http://localhost:5173.
 | `VITE_API_URL` | Where the API server lives |
 | `VITE_GOOGLE_MAPS_KEY` | Maps JavaScript API. Ships in the bundle — restrict it by HTTP referrer |
 | `VITE_GOOGLE_MAP_ID` | Optional. Only for cloud map styling |
+| `VITE_ADMIN_URL` | Where the separate admin portal is served from |
 
 ### Database
 
@@ -104,6 +130,10 @@ Run each file in `db/` once, in order, in the Supabase SQL editor:
 | `006_profile_email.sql` | The address trip mail is sent to |
 | `007_messages_and_reports.sql` | In-app messages on a trip, and reporting one that went wrong |
 | `008_ride_expiry.sql` | The departure as a real instant, and the sweep that clears out rides that are over |
+| `009_admin.sql` | The administrator privilege, account suspension, and the audit log |
+| `010_ratings.sql` | Five stars from each side of a trip about the other, and the average per person |
+| `011_admin_detail.sql` | The decision kept on the report itself, plus the indexes the admin queue reads by |
+| `012_admin_invites.sql` | Appointing an administrator at any address, confirmed by a code sent to it |
 
 `db/backfill-routes.mjs` fills in routes for any rides created before
 coordinates were stored. It is a dry run unless given `--apply`.
@@ -135,10 +165,39 @@ Everything except `/api/health` requires `Authorization: Bearer <token>`.
 | POST | `/api/reports` | Report a trip. Either side; the server decides who it is about |
 | GET | `/api/reports/mine` | Reports you have filed, and where each one got to |
 | GET | `/api/reports/for/:requestId` | What you have already filed about one trip |
+| POST | `/api/ratings` | Rate the person you travelled with. Either side; the server decides who it is about |
+| GET | `/api/ratings/mine` | Your own average, and the comments, without names attached |
+| GET | `/api/ratings/for/:requestId` | What you already gave for one trip |
 | GET | `/api/geo/search?q=` | Address autocomplete. Suggestions only — no coordinates |
 | GET | `/api/geo/resolve?placeId=` | Coordinates for the one suggestion picked |
 | GET | `/api/geo/reverse?lat=&lng=` | Coordinates to a place name |
 | POST | `/api/geo/route` | Road route between two points |
+
+### Administration
+
+Everything under `/api/admin` requires an account with `is_admin` set.
+To anybody else these answer **404**, not 403 — a 403 would confirm the
+endpoint exists and hand whoever went looking a map of the admin surface.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| GET | `/api/admin/overview` | Counts: reports by status, accounts, suspensions, rides |
+| GET | `/api/admin/reports?status=` | The queue. `open`, `reviewing`, `resolved`, `dismissed`, `all` |
+| PATCH | `/api/admin/reports/:id` | Move a report along. A note is required to resolve or dismiss |
+| GET | `/api/admin/users?q=` | Find an account by name or email |
+| GET | `/api/admin/users/:id` | One account: reports for and against, rides, admin history |
+| POST | `/api/admin/users/:id/suspend` | Suspend an account. Reason required |
+| POST | `/api/admin/users/:id/reinstate` | Let an account back in |
+| GET | `/api/admin/reports?status=&category=` | The queue, filtered by either |
+| GET | `/api/admin/users?q=&role=&suspended=&sort=` | Accounts, with rating and report counts |
+| GET | `/api/admin/rides?q=&state=` | Every ride, not only the joinable ones |
+| DELETE | `/api/admin/rides/:id` | Remove a ride and its requests. Reason required |
+| POST | `/api/admin/users/:id/role` | Grant or revoke administrator for an existing account. Reason required |
+| POST | `/api/admin/invites` | Propose any address. Emails a six-digit code; appoints nobody |
+| POST | `/api/admin/invites/verify` | The code, come back. Appoints, creating the account if there is none |
+| GET | `/api/admin/invites` | Invitations still waiting on a code |
+| DELETE | `/api/admin/invites/:id` | Withdraw one before it is used |
+| GET | `/api/admin/actions?action=&adminId=` | The audit log, most recent first |
 
 ### `GET /api/rides` parameters
 
@@ -160,7 +219,7 @@ API calls.
 | 35% | Route | Dropoff distance to the driver's road line, plus a direction-of-travel check |
 | 25% | Time | Ride's arrival (departure + real duration) vs the rider's arrive-by |
 | 20% | Pickup | How far the rider walks to meet the route |
-| 15% | Reliability | Count of that driver's accepted rides |
+| 15% | Reliability | That driver's accepted-ride count, blended with their star rating as more people rate them. An unrated driver scores on the count alone |
 | 5% | Vehicle | Preference match |
 
 Components with nothing to compare against are dropped and the remaining
@@ -290,7 +349,7 @@ nobody driving it.
 ## What a seat costs
 
 The driver does not set the price, and there is no column to store one in.
-A fare is derived, every time it is asked for, from the route the server
+The cost is derived, every time it is asked for, from the route the server
 measured when the ride was posted — so a ride cannot carry a number its
 driver chose, because there is nowhere for that number to live.
 
@@ -301,36 +360,69 @@ out which of them is being reasonable. Derived, every ride of the same
 length in the same class of vehicle costs the same, and the number on the
 board cannot be argued with by either side.
 
-| Class | Vehicles | Per km | Minimum |
-| --- | --- | --- | --- |
-| Two-wheeler | bike, scooty | ₹2.00 | ₹10 |
-| Car | car | ₹3.50 | ₹15 |
+**The journey has a cost, and the two people in the vehicle split it.**
+That is the entire model. The rate is what the trip costs to make per
+kilometre — not what a rider is charged — and the rider carries half of
+it.
 
-Rounded to the nearest ₹5, so it can be settled in cash without anyone
-hunting for change. A bike and a scooty are deliberately one class: they
-cost the same to run and carry the same one pillion, and splitting them
-would only invite a driver to relabel their vehicle for a better rate. An
+| Class | Vehicles | Journey costs | Each person pays | Minimum each |
+| --- | --- | --- | --- | --- |
+| Two-wheeler | bike, scooty | ₹6.00/km | ₹3.00/km | ₹10 |
+| Car | car | ₹10.00/km | ₹5.00/km | ₹15 |
+
+So a 6.8 km ride on a scooty cost ₹40 to make, and each of them carries
+₹20 of it. The same trip by car cost ₹68, and they carry ₹34 each.
+
+A bike and a scooty are deliberately one class: they cost about the same
+to run and carry the same one pillion, and splitting them would only
+invite a driver to relabel their vehicle for a better rate. An
 unrecognised or missing vehicle takes the cheaper class — a guess that
 overcharges is worse than one that does not.
 
-It is a **contribution to running costs, not a fare**. The rates are
-roughly half a two-wheeler's running cost and a third of a car's — the
-split you would reach if the people in the vehicle divided the cost between
-them — and they sit well under what an auto or a bike taxi charges for the
-same distance. The driver was making this trip anyway; the rider is sharing
-the cost of a journey that was already happening, not buying a service.
-Pricing it like a taxi would change what this app is, both to the people
-using it and to anyone asking whether it needs a permit.
+### Why those rates
 
-The minimums are deliberately low. Trips on this board run 2–8 km, and a
-floor set much higher would bind on most of them — at which point the
-per-km rate is decoration and every short ride silently costs the same. As
-it stands it binds on about a third, which is the short-hop case it exists
-for. The working is in `server/src/pricing.js`, and every screen that shows
-a price also shows the rate behind it.
+They are round numbers sitting at or under what the vehicle actually
+costs to run, checked against Bengaluru prices with petrol at
+₹110.93/litre:
+
+| | Fuel | Wear | Depreciation, insurance | Real cost |
+| --- | --- | --- | --- | --- |
+| Two-wheeler (~45 km/l) | ₹2.50 | ₹1.00 | ₹1.75 | ~₹5.25/km |
+| Small car (~16 km/l) | ₹6.90 | ₹2.50 | ₹7.00 | ~₹16.40/km |
+
+The car rate is well under its real cost and the two-wheeler rate is
+close to it. Neither is above it, and that is the line that matters:
+Karnataka's transport department distinguishes a private vehicle sharing
+its costs from a private vehicle running as a taxi, and has acted on that
+distinction. A rate that cannot exceed what the journey actually cost is
+on the right side of it. For comparison, an auto over the same 6.8 km is
+about ₹122 at the government meter — roughly double the car and three
+times the scooty.
+
+### The minimum, and the rounding
+
+Both exist for the trip too short for distance to mean anything: the
+driver still came out of their way and waited at a kerb, which no per-km
+rate captures. Both are deliberately small.
+
+The price used to round to ₹5, on the reasoning that it should be
+settleable in cash without hunting for change. On a board where trips run
+2–8 km that rounding, stacked on the minimum, flattened almost every
+two-wheeler ride to the same ₹10 — a 2 km hop and a 6 km cross-town ride
+came to exactly the same number, and the per-km rate did no work at all.
+Distance is the thing being shared here, so it now rounds to the rupee
+and the minimum binds only below about 3 km.
+
+The working is in `server/src/pricing.js`, and every screen that shows a
+price also shows the rate behind it. When a trip finishes, the live screen
+shows what the whole journey cost with both halves under it — a rider who
+sees only their ₹20 is being told a price, while one who sees "the journey
+cost ₹40, you carry half" is being shown an arithmetic they can check. The
+driver paid for all of it up front, so each side is told which half is
+theirs and who hands what to whom.
 
 A ride posted before routes were stored has no measured length and so no
-fare. Those show a dash rather than an invented number.
+price. Those show a dash rather than an invented number.
 
 ## Messages and reports
 

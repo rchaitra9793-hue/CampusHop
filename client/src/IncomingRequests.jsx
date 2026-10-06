@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ReportTrip from "./ReportTrip";
+import Stars from "./Stars";
 import { formatFare, fareNote } from "./lib/fare";
 
 /**
@@ -122,6 +123,17 @@ export default function IncomingRequests({
                     minute: "2-digit",
                   })}
                 </span>
+
+                {/* How other drivers found them. This is the one place it
+                    matters most: it is on the screen where a driver is
+                    deciding whether to say yes. */}
+                {r.riderRating != null && (
+                  <Stars
+                    value={r.riderRating}
+                    count={r.riderRatingCount}
+                    size="small"
+                  />
+                )}
               </div>
             </div>
 
@@ -131,12 +143,23 @@ export default function IncomingRequests({
               {r.expired ? "expired" : r.status}
             </span>
 
-            {/* The driver sees exactly what the rider was quoted. Two
-                different numbers is how an argument at the kerb starts. */}
+            {/* The driver sees exactly what the rider sees. Two different
+                numbers is how an argument at the kerb starts — and with a
+                split there is only one number anyway: they each carry the
+                same half of what the journey costs. */}
             {r.fare && (
               <p className="ride-fare ride-fare--inline">
                 <strong>{formatFare(r.fare)}</strong>
-                <span>{fareNote(r.fare)} · rider contributes</span>
+                <span>{fareNote(r.fare)} · each</span>
+              </p>
+            )}
+
+            {/* What this driver gave them. A line of text, not a control:
+                the rating is given on the end-of-ride screen, and this is
+                only the queue remembering that it was. */}
+            {r.myRating != null && (
+              <p className="trip-rated">
+                You rated this <Stars value={r.myRating} size="small" />
               </p>
             )}
 
@@ -158,6 +181,25 @@ export default function IncomingRequests({
                     {r.tripStatus && r.tripStatus !== "scheduled"
                       ? "Open live map →"
                       : "Start the trip →"}
+                  </button>
+                )}
+
+                {/* A trip that is over has no live map worth opening,
+                    but it does have a summary: what the journey cost,
+                    which half each of them carries, and the rating.
+                    Reopening it is the way back to all three — a rating
+                    collected on the end-of-ride screen needs that screen
+                    to still be reachable once the screen has been closed.
+
+                    Quietly styled on purpose. The loud button on this card
+                    belongs to the trip still happening, not to one that
+                    finished last week. */}
+                {r.state === "finished" && onOpenLive && (
+                  <button
+                    className="secondary-button"
+                    onClick={() => onOpenLive(r)}
+                  >
+                    {r.myRating == null ? "Rate this trip →" : "Trip summary →"}
                   </button>
                 )}
 

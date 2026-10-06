@@ -1,5 +1,6 @@
 const express = require("express");
 const { db } = require("../db");
+const { ratingsFor, myRatings } = require("../ratings");
 const notify = require("../email");
 const config = require("../config");
 const { fareDetail } = require("../pricing");
@@ -261,6 +262,13 @@ router.get("/mine", async (req, res, next) => {
       .select("id, name, role, vehicle, vehicle_number, phone")
       .in("id", driverIds);
 
+    // Two reads for the whole list: how each driver is rated, and what
+    // this rider has already said about each trip.
+    const [driverRatings, mine] = await Promise.all([
+      ratingsFor(driverIds),
+      myRatings(req.user.id, reqs.map((r) => r.id)),
+    ]);
+
     const trips = reqs.map((r) => {
       const ride = rides?.find((x) => x.id === r.ride_id);
       const driver = profiles?.find((p) => p.id === ride?.driver_id);
@@ -310,6 +318,17 @@ router.get("/mine", async (req, res, next) => {
         // Said plainly rather than rendered as a card with empty fields,
         // which is what a withdrawn ride used to look like.
         rideMissing: !ride,
+
+        // The driver's standing, which RideDetails has had a line for
+        // since before there was anything to put in it.
+        rating: ride ? driverRatings[ride.driver_id]?.average ?? null : null,
+        ratingCount: ride ? driverRatings[ride.driver_id]?.count ?? 0 : 0,
+
+        // What this rider gave, if they have rated it. Null means the
+        // trip is still waiting to be rated, which is what the prompt in
+        // My Trips is driven by.
+        myRating: mine[r.id]?.stars ?? null,
+        myRatingComment: mine[r.id]?.comment ?? null,
       };
     });
 
@@ -366,6 +385,13 @@ router.get("/incoming", async (req, res, next) => {
       .select("id, name, phone")
       .in("id", riderIds);
 
+    // A driver is rated and does the rating, both. Same two reads as the
+    // rider's list, pointed the other way.
+    const [riderRatings, mine] = await Promise.all([
+      ratingsFor(riderIds),
+      myRatings(req.user.id, reqs.map((r) => r.id)),
+    ]);
+
     // Queue position is per ride: "2nd in line for the 8:30 to campus",
     // not 2nd across everything this driver has posted.
     const seenPerRide = {};
@@ -416,6 +442,14 @@ router.get("/incoming", async (req, res, next) => {
         // a trip that is over has no map worth opening.
         tripStatus: ride?.trip_status || "scheduled",
         state: tripState(r, ride),
+
+        // How this rider has been rated by the drivers who took them.
+        riderRating: riderRatings[r.rider_id]?.average ?? null,
+        riderRatingCount: riderRatings[r.rider_id]?.count ?? 0,
+
+        // And what this driver gave them, if they have rated the trip.
+        myRating: mine[r.id]?.stars ?? null,
+        myRatingComment: mine[r.id]?.comment ?? null,
       };
     });
 

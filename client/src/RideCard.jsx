@@ -1,4 +1,5 @@
 import React from "react";
+import Stars from "./Stars";
 import RouteIllustration from "./RouteIllustration";
 import { formatDistance, formatDuration } from "./lib/geo";
 import { formatFare, fareNote } from "./lib/fare";
@@ -111,6 +112,13 @@ export default function RideCard({ ride, onRequest, showMore = false, pending = 
           <span>
             {ride.role} · {ride.vehicle}
           </span>
+
+          {/* The signal a rider actually wants when choosing between two
+              cars leaving at the same time. Absent, not zero, until
+              somebody has rated them. */}
+          {ride.rating != null && (
+            <Stars value={ride.rating} count={ride.ratingCount} size="small" />
+          )}
         </div>
 
         {showMore && <button className="more-button">•••</button>}

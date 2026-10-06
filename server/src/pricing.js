@@ -16,37 +16,63 @@
 // service. Pricing it like a taxi would change what this app is, both to
 // the people using it and to anyone asking whether it needs a permit.
 
-// Running costs behind the rates below, at roughly 2026 Indian petrol
-// prices. Kept here as a comment rather than as code because they are the
-// justification for the numbers, not an input to them — recomputing a fare
-// from fuel prices on every request would make yesterday's ride cost
+// What the journey costs to make, at roughly 2026 Bengaluru prices —
+// petrol was ₹110.93/litre when these were last checked.
+//
+//   two-wheeler  ~45 km/l -> ₹2.50/km fuel, ~₹1.00/km tyres and service,
+//                            ~₹1.75/km depreciation and insurance
+//   small car    ~16 km/l -> ₹6.90/km fuel, ~₹2.50/km wear,
+//                            ~₹7.00/km depreciation and insurance
+//
+// The rates below are round numbers at or under those totals, which is
+// what keeps this expense-sharing rather than a fare. Karnataka's
+// transport department draws exactly that line — a private vehicle
+// sharing costs is one thing, a private vehicle running as a taxi is
+// another — and a rate that cannot exceed what the trip actually costs
+// is the side of it this app is on.
+//
+// Kept as a comment rather than as code because they are the
+// justification for the numbers, not an input to them — recomputing a
+// fare from today's fuel price would make yesterday's ride cost
 // something different today.
-//
-//   petrol           ~ ₹105 / litre
-//   two-wheeler      ~ 45 km/l  -> ₹2.3/km fuel, ~₹1.0/km tyres + service
-//   small car        ~ 16 km/l  -> ₹6.6/km fuel, ~₹2.5/km wear
-//
-// The rider's share is roughly half the two-wheeler's running cost and
-// roughly a third of the car's — the split you would reach if the people
-// in the vehicle divided the cost between them.
+
+// Per kilometre of the *journey*, not per person. This is the number
+// that gets divided.
 const RATE_CARD = {
   two_wheeler: {
     label: "Bike or scooty",
     vehicles: ["bike", "scooty"],
-    perKm: 2,
+    perKm: 6,
+
+    // Per person, and deliberately low. It exists for the trip too short
+    // for distance to mean anything — a driver still went out of their
+    // way and waited at a kerb, which no per-km rate captures. Set much
+    // higher it would swallow the whole 2-8 km range this board runs on,
+    // and then every ride would silently cost the same.
     minimum: 10,
   },
 
   car: {
     label: "Car",
     vehicles: ["car"],
-    perKm: 3.5,
+    perKm: 10,
     minimum: 15,
   },
 };
 
-// Rounded to something payable in cash without anybody hunting for change.
-const ROUND_TO = 5;
+// The driver and the one rider. The cost of the journey is split down
+// the middle: the driver was making the trip and paying for all of it,
+// and the rider takes half of what it cost rather than buying a seat at
+// a price somebody set.
+const SHARED_BETWEEN = 2;
+
+// Rounded to the rupee. It used to round to ₹5, on the reasoning that a
+// fare should be payable in cash without hunting for change — but on a
+// board where trips run 2-8 km that rounding, on top of the minimum,
+// flattened nearly every two-wheeler ride to the same number and left
+// the per-km rate doing no work at all. Distance is the thing being
+// shared here, so distance has to show up in the price.
+const ROUND_TO = 1;
 
 /**
  * Which rate applies to a vehicle.
@@ -68,11 +94,12 @@ function classFor(vehicle) {
 }
 
 /**
- * The rider's contribution for a ride, in whole rupees.
+ * What one person pays, in whole rupees.
  *
- * Null when the distance is unknown — rides posted before routes were
- * stored have no measured length, and inventing one would put a number on
- * screen that nothing stands behind.
+ * The journey has a cost; this is half of it. Null when the distance is
+ * unknown — rides posted before routes were stored have no measured
+ * length, and inventing one would put a number on screen that nothing
+ * stands behind.
  */
 function fareFor(vehicle, distanceMeters) {
   const metres = Number(distanceMeters);
@@ -82,15 +109,9 @@ function fareFor(vehicle, distanceMeters) {
   const rate = RATE_CARD[classFor(vehicle)];
   const km = metres / 1000;
 
-  const rounded = Math.round((rate.perKm * km) / ROUND_TO) * ROUND_TO;
+  const share = (rate.perKm * km) / SHARED_BETWEEN;
+  const rounded = Math.round(share / ROUND_TO) * ROUND_TO;
 
-  // The minimum covers the trips too short for a per-km rate to mean
-  // anything: nobody starts an engine and rides across campus for ₹3.
-  //
-  // Kept low on purpose. Campus trips measured on this board run 2-8 km,
-  // and a floor set much higher would bind on most of them — at which
-  // point the per-km rate is decoration and every short ride silently
-  // costs the same.
   return Math.max(rate.minimum, rounded);
 }
 
@@ -98,6 +119,13 @@ function fareFor(vehicle, distanceMeters) {
  * The fare plus the reasoning, so the app can show its working.
  *
  * A price nobody can question is only fair if it can also be explained.
+ *
+ * `total` is what both people pay together rather than what the route
+ * measured, so the two halves and the total always add up on screen. On
+ * a trip short enough for the minimum to lift the share, that makes the
+ * total slightly more than the journey strictly cost — `atMinimum` says
+ * so, and a total that does not equal its own halves is a worse thing to
+ * put in front of two people settling up.
  */
 function fareDetail(vehicle, distanceMeters) {
   const amount = fareFor(vehicle, distanceMeters);
@@ -110,15 +138,26 @@ function fareDetail(vehicle, distanceMeters) {
   return {
     amount,
     currency: "INR",
+
+    // What the journey cost, and what each of the two people in the
+    // vehicle carries of it.
+    total: amount * SHARED_BETWEEN,
+    splitBetween: SHARED_BETWEEN,
+
+    // Per km of the journey, and per km of one person's half.
     perKm: rate.perKm,
+    perKmEach: rate.perKm / SHARED_BETWEEN,
+
     minimum: rate.minimum,
     vehicleClass: name,
     classLabel: rate.label,
 
-    // True when the distance alone would have come to less than the floor,
-    // which is the one case where the per-km rate does not explain the
-    // number on screen.
-    atMinimum: amount === rate.minimum && rate.perKm * (distanceMeters / 1000) < rate.minimum,
+    // True when the distance alone would have come to less than the
+    // floor, which is the one case where the per-km rate does not
+    // explain the number on screen.
+    atMinimum:
+      amount === rate.minimum &&
+      (rate.perKm * (distanceMeters / 1000)) / SHARED_BETWEEN < rate.minimum,
   };
 }
 
@@ -128,8 +167,17 @@ function rateCard() {
     vehicleClass: name,
     label: rate.label,
     perKm: rate.perKm,
+    perKmEach: rate.perKm / SHARED_BETWEEN,
     minimum: rate.minimum,
+    splitBetween: SHARED_BETWEEN,
   }));
 }
 
-module.exports = { fareFor, fareDetail, rateCard, RATE_CARD, ROUND_TO };
+module.exports = {
+  fareFor,
+  fareDetail,
+  rateCard,
+  RATE_CARD,
+  ROUND_TO,
+  SHARED_BETWEEN,
+};

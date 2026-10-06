@@ -195,11 +195,44 @@ function scoreRide(ride, criteria = {}) {
     detail.minutesOffM = Math.round(diff);
   }
 
-  // --- reliability: real accepted-ride count, with a neutral baseline
-  // so a brand-new driver is not punished into irrelevance.
+  // --- reliability: how many rides they have actually run, and what the
+  // people who rode on them thought.
+  //
+  // The count alone, which is all this used to be, measures turning up.
+  // It cannot tell apart a driver who has done five trips well from one
+  // who has done five badly, and the second is the one a rider most wants
+  // to know about.
+  //
+  // Both halves keep a neutral baseline, for the same reason the count
+  // always had one: a new driver has not done anything wrong, and a
+  // scoring rule that reads "unproven" as "bad" means nobody can ever
+  // become proven. An unrated driver scores exactly what they scored
+  // before ratings existed.
   const completed = ride.completedRides ?? 0;
-  parts.reliability = 0.5 + 0.5 * Math.min(1, completed / 5);
+  const volume = 0.5 + 0.5 * Math.min(1, completed / 5);
+
   detail.completedRides = completed;
+
+  const stars = ride.rating;
+  const ratingCount = ride.ratingCount ?? 0;
+
+  if (stars != null && ratingCount > 0) {
+    // Three stars is the middle of the scale and scores neutral; five
+    // reaches 1, one reaches 0.
+    const quality = Math.min(1, Math.max(0, (stars - 1) / 4));
+
+    // A single rating is one person's day, not a reputation. Its weight
+    // grows with how many people have said the same thing, so one
+    // five-star review cannot outrank a driver with twenty fours.
+    const confidence = Math.min(1, ratingCount / 5);
+
+    parts.reliability = volume * (1 - confidence) + quality * confidence;
+
+    detail.rating = stars;
+    detail.ratingCount = ratingCount;
+  } else {
+    parts.reliability = volume;
+  }
 
   // --- vehicle preference
   if (criteria.vehicle && criteria.vehicle !== "any") {

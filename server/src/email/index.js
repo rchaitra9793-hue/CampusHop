@@ -189,11 +189,73 @@ async function notifyCancelled({ toUserId, byName, byRole, ride }) {
   }
 }
 
+
+/**
+ * The administrator invitation code.
+ *
+ * The one send in this file that is NOT fire-and-forget. Every other
+ * message here tells somebody about something that already happened, so
+ * losing it costs a notification. This one *is* the mechanism: an
+ * invitation whose code never arrived is a row in a table that nobody can
+ * ever confirm, and the administrator who created it would be left
+ * waiting for a code that does not exist. So this one is awaited, and its
+ * failure is the caller's problem to report.
+ */
+async function sendAdminInvite({ email, code, invitedBy, reason, minutes }) {
+  if (!enabled) {
+    throw Object.assign(
+      new Error(
+        "Email is not configured on this server, so an invitation code " +
+          "cannot be sent. Set SMTP_USER and SMTP_PASS in server/.env."
+      ),
+      { status: 503 }
+    );
+  }
+
+  await deliver(
+    email,
+    templates.adminInvite({
+      code,
+      invitedBy,
+      reason,
+      minutes,
+      appUrl: config.appUrl,
+    })
+  );
+}
+
+
+/**
+ * Telling somebody the appointment went through.
+ *
+ * Fire-and-forget, unlike the code that preceded it. That one *was* the
+ * mechanism and had to be awaited; this one reports something that has
+ * already happened, so a slow mail server must not sit in front of the
+ * response — and a failed send must not undo an appointment that is
+ * already true in the database.
+ */
+function notifyAdminAppointed({ email, name, invitedBy, reason, needsPassword }) {
+  if (!enabled || !email) return;
+
+  send(
+    email,
+    templates.adminAppointed({
+      name,
+      invitedBy,
+      reason,
+      needsPassword,
+      appUrl: config.appUrl,
+    })
+  );
+}
+
 module.exports = {
   enabled,
   notifyRequestReceived,
   notifyRequestAnswered,
   notifyCancelled,
+  sendAdminInvite,
+  notifyAdminAppointed,
 
   // Exposed for the preview script in db/.
   templates,

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
+import ForgotPassword from "./ForgotPassword";
+import ResetPassword from "./ResetPassword";
 import campushopLogo from "./assets/campushop-logo.png";
 import { supabase } from "./supabaseClient";
 import { api } from "./lib/api";
@@ -20,6 +22,12 @@ import LiveRide from "./LiveRide";
 import NearbyRides from "./NearbyRides";
 import RequestWaiting from "./RequestWaiting";
 import ProfilePage from "./ProfilePage";
+// Two administration screens. AdminDashboard is the operations view
+// that arrived as its own project, unchanged; AdminConsole is the one
+// built here. Each has its own gate, and an account can hold either,
+// both, or neither.
+import AdminDashboard from "./AdminDashboard";
+import AdminConsole from "./AdminConsole";
 import { useIncomingRequests } from "./lib/useIncomingRequests";
 import { upcoming } from "./lib/rideState";
 import { needsDetails } from "./lib/vehicles";
@@ -36,7 +44,15 @@ const ROTATIONS = ["-0.8deg", "0.6deg", "-0.4deg"];
 // requests and live trips already are.
 const BOARD_POLL_MS = 8000;
 
-const TABS = ["home", "find", "offer", "trips", "requests", "profile"];
+const TABS = ["home", "find", "offer", "trips", "requests", "profile", "admin", "ops"];
+
+// Everything an administrator can open. Anything else is a commuter's
+// screen, and a remembered tab from before the privilege was granted
+// would land them on one that has no nav entry to get back from.
+//
+// "ops" is the operations dashboard (ADMIN_EMAILS); "admin" is the
+// console in this repo (profiles.is_admin).
+const ADMIN_TABS = ["ops", "admin", "profile"];
 const TAB_KEY = "campushop.tab";
 
 // The live view needs a ride id to mean anything, so it is remembered as
@@ -74,12 +90,29 @@ function Logo() {
 }
 
 function Dashboard({ user, onLogout, onUserChange }) {
+  // An administrator is campus staff here, not a commuter: they are not
+  // looking for a lift, not offering one, and have no trips or requests
+  // of their own. Showing them four tabs they will never open is four
+  // things in the way of the queue they came for, so the shell below is
+  // the admin screen and their own profile, and nothing else.
+  // Either privilege puts somebody in the administration shell rather
+  // than the commuter one. They are independent: one comes from
+  // profiles.is_admin, the other from ADMIN_EMAILS on the server, and
+  // neither implies the other.
+  const hasConsole = user?.isAdmin === true;
+  const hasOps = user?.isPortalAdmin === true;
+  const admin = hasConsole || hasOps;
+
   // Reloading should put you back where you were, not at the top of the
   // app. Read once, on the way in.
-  const [live, setLive] = useState(rememberedLive);
-  const [activeTab, setActiveTab] = useState(() =>
-    rememberedLive() ? "live" : rememberedTab()
-  );
+  const [live, setLive] = useState(() => (admin ? null : rememberedLive()));
+  const [activeTab, setActiveTab] = useState(() => {
+    // Whichever they actually have. The operations view first, since it
+    // is the overview; the console is the one with the levers.
+    if (admin) return hasOps ? "ops" : "admin";
+
+    return rememberedLive() ? "live" : rememberedTab();
+  });
 
   useEffect(() => {
     try {
@@ -89,6 +122,28 @@ function Dashboard({ user, onLogout, onUserChange }) {
       // Storage unavailable — the tab simply will not survive a reload.
     }
   }, [activeTab]);
+
+  // Two ways to end up on a tab that is not yours, both of them from a
+  // remembered tab outliving the privilege that went with it: an account
+  // that has had admin removed coming back to "admin", and one that has
+  // just been granted it coming back to "find". Neither renders.
+  useEffect(() => {
+    if (admin) {
+      const home = hasOps ? "ops" : "admin";
+
+      // A tab they do not have the privilege for renders nothing, which
+      // is how a remembered tab outlives the privilege it belonged to.
+      if (!ADMIN_TABS.includes(activeTab)) return setActiveTab(home);
+      if (activeTab === "ops" && !hasOps) return setActiveTab(home);
+      if (activeTab === "admin" && !hasConsole) return setActiveTab(home);
+
+      return undefined;
+    }
+
+    if (activeTab === "admin" || activeTab === "ops") setActiveTab("home");
+
+    return undefined;
+  }, [activeTab, admin, hasOps, hasConsole]);
 
   useEffect(() => {
     try {
@@ -112,8 +167,10 @@ function Dashboard({ user, onLogout, onUserChange }) {
   };
 
   // Requests are polled once here, for the whole dashboard, so a driver
-  // hears about one wherever they happen to be.
-  const incoming = useIncomingRequests(user?.id);
+  // hears about one wherever they happen to be. An administrator has no
+  // rides of their own, so there is nothing to poll for and no reason to
+  // ask every few seconds.
+  const incoming = useIncomingRequests(admin ? null : user?.id);
 
   // Accounts created before signup asked for a phone number or a vehicle
   // are missing those details. Skipping is remembered for the session
@@ -126,7 +183,8 @@ function Dashboard({ user, onLogout, onUserChange }) {
     }
   });
 
-  const askForVehicle = needsDetails(user) && !vehiclePromptSkipped;
+  // And no reason to ask an administrator what they drive.
+  const askForVehicle = !admin && needsDetails(user) && !vehiclePromptSkipped;
 
   const skipVehiclePrompt = () => {
     try {
@@ -306,41 +364,77 @@ function Dashboard({ user, onLogout, onUserChange }) {
 
       <header className="topbar">
         <button
-  className="logo-button"
-  onClick={() => setActiveTab("home")}
->
-  <Logo />
-</button>
+          className="logo-button"
+          onClick={() =>
+            setActiveTab(admin ? (hasOps ? "ops" : "admin") : "home")
+          }
+        >
+          <Logo />
+        </button>
 
         <nav className="main-nav">
-          <button
-  className={activeTab === "find" ? "active" : ""}
-  onClick={() => setActiveTab("find")}
->
-  Find a ride
-</button>
+          {/* The commuter's four tabs. An administrator sees none of them;
+              see the note at the top of this component. */}
+          {!admin && (
+            <>
+              <button
+                className={activeTab === "find" ? "active" : ""}
+                onClick={() => setActiveTab("find")}
+              >
+                Find a ride
+              </button>
 
-          <button
-            className={activeTab === "offer" ? "active" : ""}
-            onClick={() => setActiveTab("offer")}
-          >
-            Offer a ride
-          </button>
+              <button
+                className={activeTab === "offer" ? "active" : ""}
+                onClick={() => setActiveTab("offer")}
+              >
+                Offer a ride
+              </button>
 
-          <button
-            className={activeTab === "trips" ? "active" : ""}
-            onClick={() => setActiveTab("trips")}
-          >
-            My trips
-          </button>
+              <button
+                className={activeTab === "trips" ? "active" : ""}
+                onClick={() => setActiveTab("trips")}
+              >
+                My trips
+              </button>
 
-          <button
-            className={activeTab === "requests" ? "active" : ""}
-            onClick={() => setActiveTab("requests")}
-          >
-            Requests
-            {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
-          </button>
+              <button
+                className={activeTab === "requests" ? "active" : ""}
+                onClick={() => setActiveTab("requests")}
+              >
+                Requests
+                {pendingCount > 0 && (
+                  <span className="nav-badge">{pendingCount}</span>
+                )}
+              </button>
+            </>
+          )}
+
+          {/* Hidden from everybody else, which is a courtesy and not the
+              boundary: /api/admin is gated by requireAdmin on the server
+              and answers 404 to a caller without the privilege. Someone
+              who edits this condition in their own browser gets a tab
+              whose every request comes back empty. */}
+          {/* One entry per privilege held. Somebody with both gets two
+              tabs; somebody with one gets one and never sees the other
+              exists. */}
+          {hasOps && (
+            <button
+              className={activeTab === "ops" ? "active" : ""}
+              onClick={() => setActiveTab("ops")}
+            >
+              Operations
+            </button>
+          )}
+
+          {hasConsole && (
+            <button
+              className={activeTab === "admin" ? "active" : ""}
+              onClick={() => setActiveTab("admin")}
+            >
+              Console
+            </button>
+          )}
         </nav>
 
         <div className="profile-menu">
@@ -585,13 +679,38 @@ function Dashboard({ user, onLogout, onUserChange }) {
   />
 )}
 
+{/* Guarded again at the point of render. A tab remembered in
+    localStorage from an account that used to be an admin would
+    otherwise come back after the privilege was removed. */}
+{/* Rendered inside .ops-admin, which is what scopes that project's
+    own stylesheet away from the console's. Its onBack goes to the
+    console when there is one and to the profile when there is not —
+    there is no commuter home to send an administrator to. */}
+{activeTab === "ops" && hasOps && (
+  <div className="ops-admin">
+    <AdminDashboard
+      onBack={() => setActiveTab(hasConsole ? "admin" : "profile")}
+    />
+  </div>
+)}
+
+{activeTab === "admin" && hasConsole && <AdminConsole user={user} />}
+
 {activeTab === "live" && live && (
   <LiveRide
     rideId={live.rideId}
     requestId={live.requestId}
     role={live.role}
     withName={live.withName}
-    onBack={closeLive}
+
+    // This screen is where a trip gets rated, so coming back from it is
+    // exactly when the list behind it is stale. Both lists poll anyway;
+    // this is so the card has already changed by the time it is looked
+    // at rather than a few seconds later.
+    onBack={() => {
+      incoming.refresh(true);
+      closeLive();
+    }}
     onCancelled={() => {
       // The seat is gone, so the board and the driver's queue are both
       // stale. Refresh them on the way out.
@@ -612,6 +731,15 @@ export default function App() {
   const [page, setPage] = useState("home");
   const [user, setUser] = useState(null);
 
+  // Why you are being shown the sign-in form, when you did not ask for
+  // it: you just registered, or you just changed your password.
+  const [notice, setNotice] = useState("");
+
+  // Carried from the sign-in form into the reset form, so somebody who
+  // typed their address and then realised they had forgotten the password
+  // does not type it again.
+  const [resetEmail, setResetEmail] = useState("");
+
   // Supabase keeps the session in local storage, so a reload still has a
   // valid token — but this component used to start from a blank `user`
   // and drop straight back to the landing page. Restoring it here is what
@@ -625,6 +753,18 @@ export default function App() {
     let cancelled = false;
 
     const restore = async () => {
+      // A reset link arrives as #access_token=...&type=recovery. Supabase
+      // turns that into a session and fires PASSWORD_RECOVERY, but it is
+      // a race against the restore below, which would otherwise see a
+      // perfectly good session and walk into the dashboard — leaving
+      // somebody who clicked "reset my password" signed in and no closer
+      // to a new password. Reading the hash settles it before either.
+      if (/type=recovery/.test(window.location.hash)) {
+        setPage("resetPassword");
+        setBooting(false);
+        return;
+      }
+
       const { data } = await supabase.auth.getSession();
 
       if (cancelled) return;
@@ -664,6 +804,18 @@ export default function App() {
       if (event === "SIGNED_OUT") {
         setUser(null);
         setPage("login");
+        return;
+      }
+
+      // Following the link from a reset email hands this tab a recovery
+      // session. It is a side door: enough to set a new password and not
+      // enough to be treated as signed in, so it routes to the form
+      // rather than to the dashboard. Checked before the restore above
+      // can decide this is an ordinary session.
+      if (event === "PASSWORD_RECOVERY") {
+        setUser(null);
+        setBooting(false);
+        setPage("resetPassword");
       }
     });
 
@@ -682,6 +834,7 @@ export default function App() {
   }
 
   const login = (data) => {
+    setNotice("");
     setUser(data);
     setPage("dashboard");
   };
@@ -696,8 +849,19 @@ export default function App() {
     // a driver without a vehicle number. Letting that refusal through to
     // the form is the point — swallowing it used to drop the user on the
     // dashboard with a profile that had not actually been saved.
-    setUser(await api.profile.update(profileData));
-    setPage("dashboard");
+    await api.profile.update(profileData);
+
+    // Signing up used to walk straight into the dashboard on the session
+    // the sign-up call happened to return. Ending at the sign-in form
+    // instead means the password that was just chosen gets used once
+    // while it is still fresh in mind — an account whose password was
+    // never actually typed is one nobody can get back into. It is also
+    // the only moment at which "did that work?" has a cheap answer.
+    await supabase.auth.signOut();
+
+    setUser(null);
+    setNotice("Account created. Sign in to get going.");
+    setPage("login");
   };
 
   if (page === "home") {
@@ -713,7 +877,36 @@ export default function App() {
     return (
       <LoginPage
         onLogin={login}
-        onRegister={() => setPage("register")}
+        onRegister={() => {
+          setNotice("");
+          setPage("register");
+        }}
+        onForgot={(typed) => {
+          setResetEmail(typed || "");
+          setNotice("");
+          setPage("forgotPassword");
+        }}
+        notice={notice}
+      />
+    );
+  }
+
+  if (page === "forgotPassword") {
+    return (
+      <ForgotPassword
+        email={resetEmail}
+        onBack={() => setPage("login")}
+      />
+    );
+  }
+
+  if (page === "resetPassword") {
+    return (
+      <ResetPassword
+        onDone={(message) => {
+          setNotice(message);
+          setPage("login");
+        }}
       />
     );
   }
@@ -743,6 +936,7 @@ export default function App() {
       onLogout={async () => {
         await supabase.auth.signOut();
         setUser(null);
+        setNotice("");
         setPage("login");
       }}
     />

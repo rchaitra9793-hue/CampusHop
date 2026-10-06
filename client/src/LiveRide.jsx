@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, createHtmlMarker, mapId } from "./lib/maps";
 import { api } from "./lib/api";
 import { computeRoute, formatDistance, formatDuration } from "./lib/geo";
-import { formatFare } from "./lib/fare";
+import { formatFare, formatTotal, settleNote } from "./lib/fare";
 import { vehicleIconSvg, personIconSvg, routeArrowSvg } from "./lib/vehicleIcons";
 import VehicleIcon from "./VehicleIcon";
 import TripChat from "./TripChat";
 import ReportTrip from "./ReportTrip";
+import RatePanel from "./RatePanel";
 
 const EARTH_RADIUS_M = 6371000;
 const DEG = Math.PI / 180;
@@ -1070,6 +1071,75 @@ export default function LiveRide({
                 ? "No phone number on their profile yet."
                 : "Loading contact details…"}
             </p>
+          )}
+
+          {/* Settling up, at the only moment either of them cares about
+              it: the trip is over and one of them owes the other.
+
+              The total comes first and the halves under it, because the
+              total is the thing that explains the halves — a rider who
+              sees only "₹20" is being told a price, while a rider who
+              sees "the journey cost ₹40, you carry half" is being shown
+              an arithmetic they can check. The driver paid for all of it
+              up front, so what actually has to happen is one of them
+              handing over one half, and each side is told which. */}
+          {finished && ride.fare && (
+            <section className="settle-up">
+              <span className="eyebrow">TRIP COMPLETE</span>
+
+              <div className="settle-total">
+                <small>WHAT THIS JOURNEY COST</small>
+                <strong>{formatTotal(ride.fare)}</strong>
+                <span>
+                  {formatDistance(ride.distanceMeters)} · ₹{ride.fare.perKm}/km ·{" "}
+                  {ride.fare.classLabel.toLowerCase()}
+                </span>
+              </div>
+
+              <div className="settle-halves">
+                <div className={isDriver ? "" : "is-you"}>
+                  <small>{isDriver ? "YOUR HALF" : "YOUR HALF"}</small>
+                  <strong>{formatFare(ride.fare)}</strong>
+                </div>
+
+                <div className="settle-divider" aria-hidden="true">
+                  ÷
+                </div>
+
+                <div className={isDriver ? "is-you" : ""}>
+                  <small>{isDriver ? "RIDER'S HALF" : "DRIVER'S HALF"}</small>
+                  <strong>{formatFare(ride.fare)}</strong>
+                </div>
+              </div>
+
+              <p className="settle-action">
+                {settleNote(ride.fare, isDriver ? "driver" : "rider")}
+              </p>
+
+              {ride.fare.atMinimum && (
+                <p className="settle-note">
+                  Short trip — the ₹{ride.fare.minimum} minimum applies. The
+                  driver still came out of their way and waited.
+                </p>
+              )}
+            </section>
+          )}
+
+          {/* Rating, where it belongs: the trip has just ended, both
+              people are still looking at this screen, and each has an
+              opinion about the other that neither will have in an hour.
+              Asking here costs nobody a second visit.
+
+              Inline rather than behind a button, because a button is a
+              thing to decide about and a row of stars is a thing to tap.
+              Both sides see it — the driver forms a view of their rider as
+              surely as the rider does of them. */}
+          {finished && requestId && (
+            <RatePanel
+              tripId={requestId}
+              role={isDriver ? "driver" : "rider"}
+              withName={withName}
+            />
           )}
 
           {/* Two stops on one line, in the order they happen. The marker

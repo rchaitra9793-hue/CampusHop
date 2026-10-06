@@ -122,6 +122,100 @@ export const api = {
     forTrip: (tripId) => request(`/reports/for/${tripId}`).then((r) => r.reports),
   },
 
+  // The operations dashboard that arrived as its own project. These are
+  // its five calls, at the paths it already used — it is unchanged, so
+  // this namespace keeps the name and the URLs it expects. Gated on the
+  // server by ADMIN_EMAILS, which answers 403.
+  admin: {
+    overview: () => request("/admin/overview"),
+    users: (q = "") => request("/admin/users", { params: { q } }).then((r) => r.users),
+    reports: (status = "") =>
+      request("/admin/reports", { params: { status } }).then((r) => r.reports),
+    updateReport: (id, status) =>
+      request(`/admin/reports/${id}`, { method: "PATCH", body: { status } }).then(
+        (r) => r.report
+      ),
+    removeRide: (id) => request(`/admin/rides/${id}`, { method: "DELETE" }),
+  },
+
+  // The console built in this repo: profiles.is_admin, the audit log,
+  // suspensions, report decisions and the invitation flow. Every one of
+  // these answers 404 rather than 403 for a caller who is not an admin,
+  // so a non-admin poking at them learns nothing about what is here.
+  adminConsole: {
+    overview: () => request("/admin-console/overview"),
+
+    reports: (status, category) =>
+      request("/admin-console/reports", { params: { status, category } }).then(
+        (r) => r.reports
+      ),
+
+    setReportStatus: (id, status, note) =>
+      request(`/admin-console/reports/${id}`, {
+        method: "PATCH",
+        body: { status, note },
+      }).then((r) => r.report),
+
+    users: (params) => request("/admin-console/users", { params }).then((r) => r.users),
+
+    user: (id) => request(`/admin-console/users/${id}`),
+
+    // The whole board, not only what has not left yet.
+    rides: (params) => request("/admin-console/rides", { params }).then((r) => r.rides),
+
+    removeRide: (id, reason) =>
+      request(`/admin-console/rides/${id}`, { method: "DELETE", body: { reason } }),
+
+    // Appointing an administrator by invitation, for somebody who has
+    // never signed up or whose address is not on the campus domain. Two
+    // steps: a code goes to the address, then the code comes back.
+    invite: (email, reason) =>
+      request("/admin-console/invites", { method: "POST", body: { email, reason } }),
+
+    confirmInvite: (email, code) =>
+      request("/admin-console/invites/verify", { method: "POST", body: { email, code } }),
+
+    invites: () => request("/admin-console/invites").then((r) => r.invites),
+
+    withdrawInvite: (id) =>
+      request(`/admin-console/invites/${id}`, { method: "DELETE" }),
+
+    // Granting and revoking administrator for an account already on the
+    // board. Behind requireAdmin, so only somebody who already has the
+    // privilege can hand it out.
+    setRole: (id, isAdmin, reason) =>
+      request(`/admin-console/users/${id}/role`, {
+        method: "POST",
+        body: { isAdmin, reason },
+      }),
+
+    suspend: (id, reason) =>
+      request(`/admin-console/users/${id}/suspend`, { method: "POST", body: { reason } }),
+
+    reinstate: (id, note) =>
+      request(`/admin-console/users/${id}/reinstate`, { method: "POST", body: { note } }),
+
+    // Returns the rows and the administrators who appear in them, so the
+    // "by" filter does not need a second call.
+    actions: (params) => request("/admin-console/actions", { params }),
+  },
+
+  // Rating the person you travelled with. Five stars and an optional
+  // sentence, from each side about the other. The server decides who a
+  // rating is about — the client never names a subject, the same rule
+  // reports follow.
+  ratings: {
+    create: (body) => request("/ratings", { method: "POST", body }),
+
+    // What the caller already put for one trip, so the form opens showing
+    // it rather than blank.
+    forTrip: (tripId) =>
+      request(`/ratings/for/${tripId}`).then((r) => r.rating),
+
+    // Your own standing, and what people said.
+    mine: () => request("/ratings/mine"),
+  },
+
   geo: {
     search: (q, { session, ...options } = {}) =>
       request("/geo/search", { params: { q, session }, ...options }).then((r) => r.places),

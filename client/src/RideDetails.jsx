@@ -1,4 +1,5 @@
 import React from "react";
+import Stars from "./Stars";
 import RouteMap from "./RouteMap";
 import { formatDistance, formatDuration } from "./lib/geo";
 import { formatFare, fareNote, FARE_EXPLAINER } from "./lib/fare";
@@ -102,7 +103,17 @@ export default function RideDetails({ trip, onBack }) {
         </div>
 
         <div className="trip-meta">
-          <p>Rating: {trip.rating ?? "—"}</p>
+          {/* This line has existed since before there was anything to put
+              in it. There is now. */}
+          <p className="trip-meta-rating">
+            Rating:{" "}
+            {trip.rating != null ? (
+              <Stars value={trip.rating} count={trip.ratingCount} size="small" />
+            ) : (
+              <span className="stars stars--none">Not rated yet</span>
+            )}
+          </p>
+
           <p>Match score: {trip.score ?? "—"}%</p>
         </div>
       </section>

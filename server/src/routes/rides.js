@@ -1,5 +1,6 @@
 const express = require("express");
 const { db } = require("../db");
+const { ratingsFor } = require("../ratings");
 const { computeRoute } = require("../geo");
 const { rankRides, withProximity, minutesOfDay } = require("../match");
 const { fareDetail } = require("../pricing");
@@ -120,6 +121,13 @@ function toRide(row, completedByDriver = {}, context = {}) {
     tripStatus: row.trip_status || "scheduled",
 
     completedRides: completedByDriver[row.driver_id] || 0,
+
+    // What the people who have actually ridden with them think. Null
+    // rather than 0 for a driver nobody has rated yet: zero stars is a
+    // verdict, and "no verdict yet" is a different thing to show.
+    rating: context.ratings?.[row.driver_id]?.average ?? null,
+    ratingCount: context.ratings?.[row.driver_id]?.count ?? 0,
+
     createdAt: row.created_at,
 
     // The plate a rider will be looking for at the kerb, and the driver's
@@ -240,12 +248,17 @@ router.get("/", async (req, res, next) => {
   try {
     const rows = await fetchUpcomingRides();
 
-    const [counts, context] = await Promise.all([
+    const [counts, context, ratings] = await Promise.all([
       completedCounts(rows),
       callerContext(rows, req.user.id),
+
+      // One query for every driver on the board, not one per card.
+      ratingsFor(rows.map((r) => r.driver_id)),
     ]);
 
-    const rides = rows.map((row) => toRide(row, counts, context));
+    const rides = rows.map((row) =>
+      toRide(row, counts, { ...context, ratings })
+    );
 
     const q = req.query;
 
@@ -299,12 +312,13 @@ router.get("/:id", async (req, res, next) => {
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Ride not found." });
 
-    const [counts, context] = await Promise.all([
+    const [counts, context, ratings] = await Promise.all([
       completedCounts([data]),
       callerContext([data], req.user.id),
+      ratingsFor([data.driver_id]),
     ]);
 
-    res.json({ ride: toRide(data, counts, context) });
+    res.json({ ride: toRide(data, counts, { ...context, ratings }) });
   } catch (err) {
     next(err);
   }

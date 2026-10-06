@@ -287,9 +287,190 @@ function requestCancelled({ toName, byName, byRole, ride, findUrl }) {
   };
 }
 
+
+/**
+ * Somebody has been proposed as an administrator.
+ *
+ * The code is the consent. An administrator typed this address into a box;
+ * nothing has happened yet, and nothing will until whoever reads this
+ * mailbox reads the code back. So the mail has to say three things very
+ * plainly: who proposed you, what it would let you do, and that ignoring
+ * it is a complete answer.
+ */
+function adminInvite({ code, invitedBy, reason, minutes, appUrl }) {
+  const body = `
+    <h1 style="${H1}">You have been proposed as an administrator.</h1>
+
+    <p style="${P}">
+      ${esc(invitedBy)} would like to make this address an administrator of
+      CampusHop — the campus ride-sharing app.
+    </p>
+
+    ${
+      reason
+        ? `<p style="${P}"><em>&ldquo;${esc(reason)}&rdquo;</em></p>`
+        : ""
+    }
+
+    <p style="${P}">
+      To confirm, read this code back to ${esc(invitedBy)}:
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+      <tr>
+        <td align="center" style="padding:20px;background:${COLORS.paper};border:1px solid ${COLORS.line};border-radius:14px;">
+          <div style="font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:700;letter-spacing:0.22em;color:${COLORS.ink};">
+            ${esc(code)}
+          </div>
+          <div style="font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:${COLORS.muted};margin-top:8px;">
+            expires in ${esc(String(minutes))} minutes
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    ${detailsTable([
+      detailRow("An administrator can", "read safety reports filed about anybody"),
+      detailRow("", "see and suspend any account on the campus"),
+      detailRow("", "remove rides from the board"),
+      detailRow("", "appoint and remove other administrators"),
+    ])}
+
+    <p style="${P}">
+      Every one of those actions is written to an audit log with the name of
+      the administrator who took it.
+    </p>
+
+    <p style="${QUIET}">
+      <strong>If you were not expecting this, do nothing.</strong> The code
+      is useless on its own — it only works when it is given back to the
+      person who sent it — and it expires by itself. Nobody is appointed
+      until that happens, and you can simply delete this message.
+    </p>
+
+    <p style="${QUIET}">
+      Only share this code with the administrator who told you to expect
+      it. Nobody at CampusHop will ever ask you for it by phone or chat.
+    </p>`;
+
+  return {
+    subject: `Your CampusHop administrator code: ${code}`,
+    html: layout({
+      title: "Administrator invitation",
+      preheader: `${invitedBy} has proposed this address as a CampusHop administrator.`,
+      bannerColor: COLORS.coral,
+      bannerText: "ADMINISTRATOR INVITATION",
+      body,
+    }),
+    text:
+      `${invitedBy} would like to make this address an administrator of CampusHop.\n\n` +
+      `Your confirmation code is ${code}. It expires in ${minutes} minutes.\n\n` +
+      `Read it back to ${invitedBy} to confirm.\n\n` +
+      `An administrator can read safety reports, see and suspend any account, ` +
+      `remove rides, and appoint other administrators. Every action is logged.\n\n` +
+      `If you were not expecting this, do nothing — the code expires by itself ` +
+      `and nobody is appointed. ${appUrl || ""}`.trim(),
+  };
+}
+
+
+/**
+ * The code came back, and the appointment went through.
+ *
+ * The invitation mail asked a question; this one answers it. Without it
+ * the only person who ever learns the outcome is the administrator who
+ * typed the code in — the new one read six digits down a phone and then
+ * heard nothing, with no way to tell whether it worked, and no idea an
+ * account now exists in their name.
+ *
+ * So this says three things: it went through, here is what you can now
+ * do, and here is how to get in. The last one matters most for an account
+ * created by the confirmation itself: nobody knows its password, not even
+ * the administrator who appointed them, so the way in is the ordinary
+ * reset link rather than a password sent by email.
+ */
+function adminAppointed({ name, invitedBy, reason, appUrl, needsPassword }) {
+  const greeting = name ? `Hi ${esc(name)} — you` : "You";
+
+  const body = `
+    <h1 style="${H1}">You are now an administrator.</h1>
+
+    <p style="${P}">
+      ${greeting} have been appointed an administrator of CampusHop by
+      ${esc(invitedBy)}. The code you read back is what confirmed it.
+    </p>
+
+    ${
+      reason
+        ? `<p style="${P}"><em>&ldquo;${esc(reason)}&rdquo;</em></p>`
+        : ""
+    }
+
+    ${detailsTable([
+      detailRow("You can now", "read safety reports filed about anybody"),
+      detailRow("", "see and suspend any account on the campus"),
+      detailRow("", "remove rides from the board"),
+      detailRow("", "appoint and remove other administrators"),
+    ])}
+
+    ${
+      needsPassword
+        ? `<p style="${P}">
+             <strong>Setting your password.</strong> An account was created
+             for this address just now, and nobody knows its password —
+             not even ${esc(invitedBy)}. Open CampusHop, choose
+             <strong>Forgot password?</strong> on the sign-in page, and set
+             one. The link comes back to this address.
+           </p>`
+        : `<p style="${P}">
+             Sign in as you normally do. The administration screen is
+             waiting on the other side.
+           </p>`
+    }
+
+    ${button(appUrl, needsPassword ? "Set a password" : "Open CampusHop", {
+      background: COLORS.sage,
+    })}
+
+    <p style="${QUIET}">
+      Everything an administrator does here is written to an audit log with
+      their name against it — including everything you do. That is there to
+      protect you as much as anybody: a decision you made is a decision
+      that can be shown to have been made for a reason.
+    </p>
+
+    <p style="${QUIET}">
+      If you think this is a mistake, tell ${esc(invitedBy)}. Any other
+      administrator can remove the privilege again.
+    </p>`;
+
+  return {
+    subject: "You are now a CampusHop administrator",
+    html: layout({
+      title: "Administrator appointed",
+      preheader: `${invitedBy} appointed you an administrator of CampusHop.`,
+      bannerColor: COLORS.sageLight,
+      bannerText: "ADMINISTRATOR APPOINTED",
+      body,
+    }),
+    text:
+      `You are now an administrator of CampusHop, appointed by ${invitedBy}.\n\n` +
+      (reason ? `Reason given: ${reason}\n\n` : "") +
+      `You can read safety reports, see and suspend accounts, remove rides, ` +
+      `and appoint other administrators. Every action is written to an audit ` +
+      `log with your name against it.\n\n` +
+      (needsPassword
+        ? `An account was created for this address just now and nobody knows ` +
+          `its password. Open ${appUrl}, choose "Forgot password?", and set one.\n`
+        : `Sign in as usual at ${appUrl}\n`),
+  };
+}
+
 module.exports = {
   requestReceived,
   requestAccepted,
   requestDeclined,
   requestCancelled,
+  adminInvite,
+  adminAppointed,
 };

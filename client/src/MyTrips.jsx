@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { api } from "./lib/api";
 import ReportTrip from "./ReportTrip";
+import Stars from "./Stars";
 import { formatFare, fareNote } from "./lib/fare";
 
 export default function MyTrips({ onViewTrip, onTrackTrip }) {
@@ -222,6 +223,16 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                         ? ` · ${trip.vehicleNumber}`
                         : ""}
                     </span>
+
+                    {/* Only once there is a rating. An unrated driver is
+                        not a nought-star driver. */}
+                    {trip.rating != null && (
+                      <Stars
+                        value={trip.rating}
+                        count={trip.ratingCount}
+                        size="small"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -371,6 +382,15 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                     trips live on this tab now, so the way to report one
                     has to be here rather than only on the tab they just
                     left. It stays for as long as the trip is kept. */}
+                {/* What this rider already said about the trip, so the
+                    card shows the verdict rather than only offering to
+                    collect one. */}
+                {trip.myRating != null && (
+                  <p className="trip-rated">
+                    You rated this <Stars value={trip.myRating} size="small" />
+                  </p>
+                )}
+
                 {trip.status === "accepted" && !trip.rideMissing && (
                   <div className="trip-card-actions">
                     <button
@@ -379,6 +399,19 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                     >
                       View ride →
                     </button>
+
+                    {/* The end-of-ride screen, reopened. It holds the
+                        fare split and the rating, and a rating asked for
+                        on that screen needs the screen to still be there
+                        once it has been closed. */}
+                    {onTrackTrip && (
+                      <button
+                        className="secondary-button"
+                        onClick={() => onTrackTrip(trip)}
+                      >
+                        {trip.myRating == null ? "Rate this trip →" : "Trip summary →"}
+                      </button>
+                    )}
 
                     <button
                       className="secondary-button"
