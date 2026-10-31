@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import AddressInput from "./AddressInput";
 import RideCard from "./RideCard";
+import MemberStats from "./MemberStats";
 import RouteMap from "./RouteMap";
 import {
   computeRoute,
@@ -479,6 +480,8 @@ export default function FindRide({ rides, onRequest, initialSearch, pendingRideI
                   Math.round(requested.distanceFromMe)
                 )} from you.`}
             </p>
+
+            <MemberStats stats={requested.driverStats} label={`About ${requested.name}`} />
 
             <div className="modal-actions">
               <button

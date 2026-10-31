@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import campushopLogo from "./assets/campushop-logo.png";
 import { api } from "./lib/api";
+import { cancelKey, markNoticeSeen } from "./lib/rideNotices";
 
 // How long we hold the door open before admitting the driver may simply
 // not be looking at their phone.
@@ -71,6 +72,12 @@ export default function RequestWaiting({ rideId, tripId, driverName, onClose, on
           settledRef.current = true;
           setStatus(mine.status);
         }
+
+        if (mine.cancelledBy) {
+          settledRef.current = true;
+          markNoticeSeen(cancelKey(mine.tripId));
+          setStatus("cancelled");
+        }
       } catch {
         // A failed poll is not an answer. Keep waiting.
       }
@@ -122,6 +129,10 @@ export default function RequestWaiting({ rideId, tripId, driverName, onClose, on
     declined: {
       title: "Not this time",
       body: `${driverName || "The driver"} couldn't take this one. The board has other rides going your way.`,
+    },
+    cancelled: {
+      title: "Your ride has been cancelled",
+      body: `${driverName || "The driver"} cancelled this ride. The board has other rides going your way.`,
     },
     gone: {
       title: "That ride is gone",

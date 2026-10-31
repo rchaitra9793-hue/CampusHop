@@ -288,6 +288,45 @@ function requestCancelled({ toName, byName, byRole, ride, findUrl }) {
 }
 
 
+/** A report was decided by an administrator. Goes to the reporter. */
+function reportDecision({ reporterName, category, status, resolution, decidedBy, appUrl }) {
+  const decidedLabel = status === "dismissed" ? "dismissed" : "resolved";
+  const body = `
+    <h1 style="${H1}">Your report has been ${decidedLabel}.</h1>
+    <p style="${P}">
+      Hi ${esc(reporterName)} — the CampusHop administration team has reviewed
+      your report about <strong>${esc(category || "a trip issue")}</strong>.
+    </p>
+    ${detailsTable([
+      detailRow("Decision", decidedLabel),
+      detailRow("Reviewed by", decidedBy),
+      detailRow("Admin note", resolution || "No additional note was provided."),
+    ])}
+    ${button(appUrl, "Open CampusHop", { background: COLORS.coral, color: COLORS.ink })}
+    <p style="${QUIET}">
+      Thanks for speaking up. Reports help keep campus rides safer for everyone.
+    </p>`;
+
+  return {
+    subject: `CampusHop update — your ${category || "report"} was ${decidedLabel}`,
+    html: layout({
+      title: "Report update",
+      preheader: `Your CampusHop report has been ${decidedLabel}.`,
+      bannerColor: status === "dismissed" ? COLORS.lavenderLight : COLORS.sageLight,
+      bannerText: `Report ${decidedLabel}`,
+      body,
+    }),
+    text: [
+      `Your CampusHop report has been ${decidedLabel}.`,
+      `Category: ${category || "Report"}`,
+      `Reviewed by: ${decidedBy || "CampusHop admin"}`,
+      `Note: ${resolution || "No additional note was provided."}`,
+      `Open CampusHop: ${appUrl}`,
+    ].join("\n"),
+  };
+}
+
+
 /**
  * Somebody has been proposed as an administrator.
  *
@@ -466,11 +505,78 @@ function adminAppointed({ name, invitedBy, reason, appUrl, needsPassword }) {
   };
 }
 
+/**
+ * The morning of the ride. Goes to the driver (once, listing their riders)
+ * and to each accepted rider.
+ */
+function departureReminder({ toName, role, ride, people, vehicleNumber, driverPhone, fare, appUrl }) {
+  const driving = role === "driver";
+  const who = (people || []).filter(Boolean).join(", ");
+
+  const body = `
+    <h1 style="${H1}">Your ride is today at ${esc(ride?.time || "")}.</h1>
+
+    <p style="${P}">
+      Hi ${esc(toName)} — a quick reminder that ${
+        driving
+          ? `you're driving ${who ? esc(who) : "your riders"} today.`
+          : `${esc(who || "your driver")} is picking you up today.`
+      }
+    </p>
+
+    ${routeBlock(ride?.pickup, ride?.dropoff)}
+
+    ${detailsTable([
+      detailRow("Date", ride?.date),
+      detailRow("Departs", ride?.time),
+      detailRow(driving ? "Riders" : "Driver", who),
+      driving ? "" : detailRow("Vehicle", ride?.vehicle),
+      driving ? "" : detailRow("Number plate", vehicleNumber),
+      driving ? "" : detailRow("Driver's phone", driverPhone),
+      detailRow(driving ? "Each rider pays you" : "Your share", fare ? `₹${fare}` : null),
+    ])}
+
+    ${button(appUrl, driving ? "Open the trip" : "Track your ride", { background: COLORS.sage })}
+
+    <p style="${QUIET}">
+      ${
+        driving
+          ? "Open the live map when you set off so your riders can see you coming."
+          : "Be at the pickup a couple of minutes early. You can pay by UPI or cash once the ride is completed."
+      }
+    </p>`;
+
+  return {
+    subject: `Reminder: your CampusHop ride today at ${ride?.time || ""}`.trim(),
+    html: layout({
+      title: "Ride reminder",
+      preheader: `${ride?.pickup || ""} → ${ride?.dropoff || ""} at ${ride?.time || ""}`,
+      bannerColor: COLORS.sageLight,
+      bannerText: "Ride today",
+      body,
+    }),
+    text: [
+      `Reminder: your CampusHop ride is today at ${ride?.time || ""}.`,
+      ``,
+      `${ride?.pickup} -> ${ride?.dropoff}`,
+      driving ? `Riders: ${who}` : `Driver: ${who}`,
+      !driving && vehicleNumber ? `Look for: ${vehicleNumber}` : ``,
+      fare ? (driving ? `Each rider pays you: Rs ${fare}` : `Your share: Rs ${fare}`) : ``,
+      ``,
+      appUrl,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
 module.exports = {
+  departureReminder,
   requestReceived,
   requestAccepted,
   requestDeclined,
   requestCancelled,
+  reportDecision,
   adminInvite,
   adminAppointed,
 };

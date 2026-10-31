@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import MemberStats from "./MemberStats";
 
 /**
  * Ride requests standing wherever the driver happens to be.
@@ -91,6 +92,9 @@ export default function RequestAlerts({
               <span>wants a seat · #{r.position} in line</span>
             </div>
           </div>
+
+          {/* Who is asking, before deciding. */}
+          <MemberStats stats={r.riderStats} label={`About ${r.riderName}`} />
 
           <div className="request-alert-route">
             <strong>{r.ride?.pickup}</strong>

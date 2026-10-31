@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { supabase } from "./supabaseClient";
 import { api } from "./lib/api";
 import PasswordField from "./PasswordField";
+import { isCampusEmail, CAMPUS_EMAIL_ERROR } from "./lib/campusEmail";
 
-export default function LoginPage({ onLogin, onRegister, onForgot, notice }) {
+export default function LoginPage({ onLogin, onRegister, onForgot, onVerify, notice }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -17,14 +18,34 @@ export default function LoginPage({ onLogin, onRegister, onForgot, notice }) {
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+
+    const address = email.trim().toLowerCase();
+
+    // Students and faculty only; the admin sign-in is left as it was. The
+    // server applies the same rule to every non-admin account regardless
+    // of which option was picked here.
+    if (who === "campus" && !isCampusEmail(address)) {
+      setError(CAMPUS_EMAIL_ERROR);
+      return;
+    }
+
     setLoading(true);
 
     const { error: loginError } = await supabase.auth.signInWithPassword({
-      email,
+      email: address,
       password,
     });
 
     if (loginError) {
+      // Registered but never entered the code: send them to finish that
+      // rather than leaving them stuck on a sign-in that cannot succeed.
+      if (/not confirmed/i.test(loginError.message) && isCampusEmail(address)) {
+        await supabase.auth.resend({ type: "signup", email: address });
+        setLoading(false);
+        onVerify(address);
+        return;
+      }
+
       setError(loginError.message);
       setLoading(false);
       return;
@@ -36,6 +57,8 @@ export default function LoginPage({ onLogin, onRegister, onForgot, notice }) {
     try {
       onLogin(await api.profile.get());
     } catch (err) {
+      // The server refused this account; do not leave its session behind.
+      await supabase.auth.signOut();
       setError(err.message);
     } finally {
       setLoading(false);

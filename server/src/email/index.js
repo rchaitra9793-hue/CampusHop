@@ -190,6 +190,24 @@ async function notifyCancelled({ toUserId, byName, byRole, ride }) {
 }
 
 
+/** Tell the person who filed a report what the administration decided. */
+function notifyReportDecision({ reporter, category, status, resolution, decidedBy }) {
+  if (!enabled || !reporter?.email) return;
+
+  send(
+    reporter.email,
+    templates.reportDecision({
+      reporterName: reporter.name || "there",
+      category,
+      status,
+      resolution,
+      decidedBy,
+      appUrl: config.appUrl,
+    })
+  );
+}
+
+
 /**
  * The administrator invitation code.
  *
@@ -254,8 +272,14 @@ module.exports = {
   notifyRequestReceived,
   notifyRequestAnswered,
   notifyCancelled,
+  notifyReportDecision,
   sendAdminInvite,
   notifyAdminAppointed,
+
+  // Awaitable send, for the reminder job, which only marks a reminder as
+  // sent once it actually went out.
+  deliver,
+  addressFor,
 
   // Exposed for the preview script in db/.
   templates,

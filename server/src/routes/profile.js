@@ -1,6 +1,9 @@
 const express = require("express");
+const { createClient } = require("@supabase/supabase-js");
+const config = require("../config");
 const { db } = require("../db");
-const { invalidate } = require("../auth");
+const { invalidate, invalidateUser } = require("../auth");
+const { statsFor } = require("../memberStats");
 
 const router = express.Router();
 
@@ -48,9 +51,30 @@ function plateProblem(plate) {
   return null;
 }
 
+// A UPI ID is handle@bank — e.g. name@okaxis, 9876543210@ybl.
+const UPI_PATTERN = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z][a-zA-Z0-9.\-]{1,63}$/;
+
+/** The UPI ID and lifetime stats, which are not part of the cached user. */
+async function extras(userId) {
+  const [{ data, error }, stats] = await Promise.all([
+    db.from("profiles").select("upi_id").eq("id", userId).maybeSingle(),
+    statsFor([userId]).catch(() => ({})),
+  ]);
+
+  return {
+    upiId: error ? null : data?.upi_id || null,
+    paymentsReady: !error,
+    stats: stats[userId] || null,
+  };
+}
+
 /** GET /api/profile — who the caller is, according to the server. */
-router.get("/", (req, res) => {
-  res.json({ user: req.user });
+router.get("/", async (req, res, next) => {
+  try {
+    res.json({ user: { ...req.user, ...(await extras(req.user.id)) } });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
@@ -61,10 +85,19 @@ router.get("/", (req, res) => {
  */
 router.patch("/", async (req, res, next) => {
   try {
-    const { name, pickupPoint, vehicle, capacity, vehicleNumber, phone } =
+    const { name, pickupPoint, vehicle, capacity, vehicleNumber, phone, course, upiId } =
       req.body || {};
 
     const patch = {};
+
+    // Where riders pay this driver. Empty clears it.
+    if (upiId != null) {
+      const upi = String(upiId).trim();
+      if (upi && !UPI_PATTERN.test(upi)) {
+        return res.status(400).json({ error: "That UPI ID doesn't look right. It should look like name@bank, e.g. 9876543210@ybl." });
+      }
+      patch.upi_id = upi || null;
+    }
 
     if (name != null) {
       if (!String(name).trim()) {
@@ -74,6 +107,7 @@ router.patch("/", async (req, res, next) => {
     }
 
     if (pickupPoint != null) patch.pickup_point = String(pickupPoint).trim();
+    if (course != null) patch.course = String(course).trim().slice(0, 80);
 
     if (vehicle != null) {
       if (!VEHICLES.includes(vehicle)) {
@@ -143,12 +177,37 @@ router.patch("/", async (req, res, next) => {
     // the column existed. From the token, so it is always theirs.
     if (req.user.email) patch.email = req.user.email;
 
-    const { data, error } = await db
+    // Update the caller's row when it exists. `maybeSingle()` is deliberate:
+    // older accounts can exist in Supabase Auth without a matching profiles
+    // row (for example, if signup was interrupted after Auth succeeded).
+    // In that case we create the profile instead of turning a normal setup
+    // action into PGRST116 / "0 rows".
+    let { data, error } = await db
       .from("profiles")
       .update(patch)
       .eq("id", req.user.id)
       .select()
-      .single();
+      .maybeSingle();
+
+    if (!error && !data) {
+      const created = await db
+        .from("profiles")
+        .upsert(
+          {
+            id: req.user.id,
+            name: req.user.name || req.user.email?.split("@")[0] || "Rider",
+            role: req.user.role === "faculty" ? "faculty" : "student",
+            email: req.user.email || null,
+            ...patch,
+          },
+          { onConflict: "id" }
+        )
+        .select()
+        .single();
+
+      data = created.data;
+      error = created.error;
+    }
 
     // A column the code writes but the database has not got yet. Saying
     // so beats "something went wrong": the fix is a migration, and only
@@ -156,9 +215,16 @@ router.patch("/", async (req, res, next) => {
     if (error?.code === "PGRST204") {
       console.error("Missing column — run the migrations in db/:", error.message);
 
+      const missing = /column ['"]([^'"]+)['"]/i.exec(error.message || "")?.[1];
+      const migration = missing === "vehicle_number" ? "003_vehicle_number.sql"
+        : missing === "phone" ? "004_phone_number.sql"
+        : missing === "email" ? "006_profile_email.sql"
+        : missing === "course" ? "013_campus_social.sql"
+        : missing === "upi_id" ? "014_payments_stats_reminders.sql"
+        : "the database migrations in db/";
+
       return res.status(503).json({
-        error:
-          "This profile field is not set up in the database yet. Run db/003_vehicle_number.sql in the Supabase SQL editor.",
+        error: `The profile database is missing ${missing ? `the ${missing} field` : "a required field"}. Run ${migration} in the Supabase SQL editor.`,
       });
     }
 
@@ -177,6 +243,8 @@ router.patch("/", async (req, res, next) => {
         capacity: data.capacity,
         vehicleNumber: data.vehicle_number,
         phone: data.phone,
+        course: data.course || null,
+        ...(await extras(req.user.id)),
       },
     });
   } catch (err) {
@@ -225,6 +293,132 @@ router.post("/", async (req, res, next) => {
     invalidate(header.startsWith("Bearer ") ? header.slice(7).trim() : null);
 
     res.status(201).json({ profile: data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const LIVE_TRIP = ["to_pickup", "arrived", "started"];
+
+/**
+ * DELETE /api/profile
+ *
+ * Deletes the caller's own account: their rides, their seat requests,
+ * their profile and finally the Supabase Auth user. The id comes from the
+ * verified token, and the password is checked again here, so a stolen or
+ * forgotten-open session is not enough to wipe somebody out.
+ *
+ * Students and faculty only. Administrators are managed from the admin
+ * side and are refused here.
+ */
+router.delete("/", async (req, res, next) => {
+  try {
+    const password = String(req.body?.password || "");
+    const userId = req.user.id;
+
+    if (req.user.isAdmin || req.user.isPortalAdmin) {
+      return res.status(403).json({
+        error: "Administrator accounts cannot be deleted from here.",
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({ error: "Enter your password to confirm." });
+    }
+
+    // A throwaway client, so this sign-in never touches the shared one
+    // the server uses to check tokens.
+    const verifier = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: check, error: passwordError } =
+      await verifier.auth.signInWithPassword({ email: req.user.email, password });
+
+    if (passwordError || check?.user?.id !== userId) {
+      return res.status(400).json({ error: "That password is not right." });
+    }
+
+    await verifier.auth.signOut().catch(() => {});
+
+    // Not in the middle of a trip, on either side of it. Somebody waiting
+    // at a kerb should not see their driver vanish.
+    const { data: driving, error: drivingError } = await db
+      .from("rides")
+      .select("id, trip_status")
+      .eq("driver_id", userId);
+
+    if (drivingError) throw drivingError;
+
+    const { data: riding, error: ridingError } = await db
+      .from("trip_requests")
+      .select("ride_id")
+      .eq("rider_id", userId)
+      .eq("status", "accepted");
+
+    if (ridingError) throw ridingError;
+
+    const ridingIds = (riding || []).map((q) => q.ride_id).filter(Boolean);
+    let ridingLive = false;
+
+    if (ridingIds.length) {
+      const { data: rides, error } = await db
+        .from("rides")
+        .select("trip_status")
+        .in("id", ridingIds);
+
+      if (error) throw error;
+      ridingLive = (rides || []).some((r) => LIVE_TRIP.includes(r.trip_status));
+    }
+
+    const midTrip =
+      ridingLive || (driving || []).some((r) => LIVE_TRIP.includes(r.trip_status));
+
+    if (midTrip) {
+      return res.status(409).json({
+        error: "You have a trip in progress. Finish it before deleting your account.",
+      });
+    }
+
+    // Removed explicitly rather than relying on cascades, because whether
+    // rides and requests cascade depends on how the database was created.
+    // Messages, ratings, reports filed and wall posts cascade from the
+    // profile in the migrations.
+    const rideIds = (driving || []).map((r) => r.id);
+
+    if (rideIds.length) {
+      const { error } = await db.from("trip_requests").delete().in("ride_id", rideIds);
+      if (error) throw error;
+    }
+
+    {
+      const { error } = await db.from("trip_requests").delete().eq("rider_id", userId);
+      if (error) throw error;
+    }
+
+    if (rideIds.length) {
+      const { error } = await db.from("rides").delete().in("id", rideIds);
+      if (error) throw error;
+    }
+
+    {
+      const { error } = await db.from("profiles").delete().eq("id", userId);
+      if (error) throw error;
+    }
+
+    // Last, so a failure above leaves a working account rather than a
+    // sign-in with nothing behind it.
+    const { error: authError } = await db.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error("Could not delete auth user", userId, authError.message);
+      return res.status(502).json({
+        error: "Your data was removed, but the sign-in could not be deleted. Try again.",
+      });
+    }
+
+    invalidateUser(userId);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

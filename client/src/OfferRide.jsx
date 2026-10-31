@@ -39,6 +39,7 @@ export default function OfferRide({ onPostRide }) {
     time: "",
     seats: "2",
     vehicle: "car",
+    vibe: "music",
   });
 
   const handleChange = (e) => {
@@ -88,7 +89,7 @@ export default function OfferRide({ onPostRide }) {
     setPickupPlace(null);
     setDropoffPlace(null);
     setRoute(null);
-    setForm({ date: todayLocal(), time: "", seats: "2", vehicle: "car" });
+    setForm({ date: todayLocal(), time: "", seats: "2", vehicle: "car", vibe: "music" });
   };
 
   const submitRide = async (e) => {
@@ -127,6 +128,7 @@ export default function OfferRide({ onPostRide }) {
         time: form.time,
         seats: Number(form.seats),
         vehicle: form.vehicle,
+        vibe: form.vibe,
       });
 
       setSubmitted(true);
@@ -316,6 +318,21 @@ export default function OfferRide({ onPostRide }) {
                   </select>
                 </label>
 
+              </div>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <span className="form-number">04</span>
+            <div>
+              <h3>Set the ride vibe</h3>
+              <p className="field-note">A tiny signal that makes sharing a car feel less awkward.</p>
+              <div className="vibe-grid">
+                {[['music','🎧','Music'],['chatty','💬','Chatty'],['quiet','🤫','Quiet'],['study','📚','Study talk'],['chai','☕','Chai stop']].map(([key,icon,label]) => (
+                  <button type="button" key={key} className={`vibe-option ${form.vibe === key ? 'selected' : ''}`} onClick={() => setForm(prev => ({...prev, vibe:key}))}>
+                    <span>{icon}</span><strong>{label}</strong>
+                  </button>
+                ))}
               </div>
             </div>
           </div>

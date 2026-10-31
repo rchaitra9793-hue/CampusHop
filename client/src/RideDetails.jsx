@@ -1,10 +1,16 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { api } from "./lib/api";
 import Stars from "./Stars";
 import RouteMap from "./RouteMap";
 import { formatDistance, formatDuration } from "./lib/geo";
 import { formatFare, fareNote, FARE_EXPLAINER } from "./lib/fare";
+import RatePanel from "./RatePanel";
 
 export default function RideDetails({ trip, onBack }) {
+  // Hooks run before the early return below, so their order never changes.
+  const [people, setPeople] = useState([]);
+  useEffect(() => { let cancelled = false; if (trip?.rideId) api.community.ridePeople(trip.rideId).then(p => !cancelled && setPeople(p)).catch(() => {}); return () => { cancelled = true; }; }, [trip?.rideId]);
+
   if (!trip) {
     return (
       <main className="page-shell">
@@ -78,6 +84,29 @@ export default function RideDetails({ trip, onBack }) {
           </p>
         )}
       </section>
+
+      <section className="people-youll-meet">
+        <div className="card-kicker">THE HUMAN PART</div>
+        <h2>You&apos;ll ride with</h2>
+        <p>Different course? Different year? Same route. That&apos;s the CampusHop plot twist.</p>
+        <div className="people-strip">
+          {people.map(person => (
+            <div className="person-chip" key={person.id}>
+              <span className="avatar">{person.name?.slice(0,2).toUpperCase()}</span>
+              <strong>{person.name}</strong>
+              <small>{person.isDriver ? 'Driver' : (person.course || person.role || 'Campus member')}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {trip.tripStatus === "completed" && trip.tripId && (
+        <RatePanel
+          tripId={trip.tripId}
+          role={trip.role === "Driver" || trip.role === "driver" ? "driver" : "rider"}
+          withName={trip.person}
+        />
+      )}
 
       <section className="trip-card">
         <div className="trip-route">

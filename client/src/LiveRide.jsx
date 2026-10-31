@@ -8,6 +8,14 @@ import VehicleIcon from "./VehicleIcon";
 import TripChat from "./TripChat";
 import ReportTrip from "./ReportTrip";
 import RatePanel from "./RatePanel";
+import RideOutcome from "./RideOutcome";
+import PaymentPanel from "./PaymentPanel";
+import {
+  cancelKey,
+  completeKey,
+  isCancelledStatus,
+  markNoticeSeen,
+} from "./lib/rideNotices";
 
 const EARTH_RADIUS_M = 6371000;
 const DEG = Math.PI / 180;
@@ -115,6 +123,8 @@ export default function LiveRide({
   withName,
   onBack,
   onCancelled,
+  onFinished,
+  onCompleted,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -166,6 +176,18 @@ export default function LiveRide({
   const started = tripStatus === "started";
   const finished = tripStatus === "completed";
 
+  // How the trip ended, while this screen was open: completed or
+  // cancelled. Shown as a message to both people, then back to home.
+  const [outcome, setOutcome] = useState(null);
+
+  // A trip opened after it was already over (to rate it, or to see the
+  // fare) is a summary, not a trip ending — no message, no redirect.
+  const openedFinishedRef = useRef(false);
+
+  useEffect(() => {
+    if (finished) setShowChat(false);
+  }, [finished]);
+
   // --- the ride ---------------------------------------------------------
 
   useEffect(() => {
@@ -175,6 +197,7 @@ export default function LiveRide({
       .get(rideId)
       .then((r) => {
         if (cancelled) return;
+        openedFinishedRef.current = r.tripStatus === "completed";
         setRide(r);
         setTripStatus(r.tripStatus || "scheduled");
       })
@@ -190,6 +213,58 @@ export default function LiveRide({
 
   const dropoff =
     ride?.dropoffLat != null ? { lat: ride.dropoffLat, lng: ride.dropoffLng } : null;
+
+  // --- has the trip ended? ---------------------------------------------
+  //
+  // Both sides poll the request itself, so each hears straight away when
+  // the other cancels, and the rider hears when the driver finishes.
+
+  useEffect(() => {
+    if (!requestId || outcome) return;
+
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const now = await api.requests.status(requestId);
+
+        if (cancelled) return;
+
+        if (isCancelledStatus(now.status) || now.status === "gone") {
+          const byOther = now.cancelledBy
+            ? now.cancelledBy !== (isDriver ? "driver" : "rider")
+            : true;
+
+          markNoticeSeen(cancelKey(requestId));
+          setOutcome({ kind: "cancelled", byOther, by: now.cancelledBy });
+          return;
+        }
+
+        if (now.tripStatus) setTripStatus(now.tripStatus);
+      } catch {
+        // A failed poll is not news. Try again on the next tick.
+      }
+    };
+
+    check();
+
+    const timer = setInterval(check, POLL_LIVE_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [requestId, outcome, isDriver]);
+
+  // The trip reaching "completed" while this screen is open is the end of
+  // the ride for both people.
+  useEffect(() => {
+    if (!finished || !ride || openedFinishedRef.current || outcome) return;
+
+    if (requestId) markNoticeSeen(completeKey(requestId));
+    setOutcome({ kind: "completed" });
+    onCompleted?.();
+  }, [finished, ride, outcome, requestId, onCompleted]);
 
   // --- who you are meeting ----------------------------------------------
 
@@ -361,7 +436,7 @@ export default function LiveRide({
   // --- messages waiting -------------------------------------------------
 
   useEffect(() => {
-    if (!requestId || showChat) return;
+    if (!requestId || showChat || finished) return;
 
     let cancelled = false;
 
@@ -744,19 +819,69 @@ export default function LiveRide({
   );
 
   const cancel = async () => {
-    if (!requestId) return;
+    if (!requestId || cancelling) return;
+
+    const other = isDriver ? contact?.name || withName || "your rider" : contact?.name || "your driver";
+
+    if (!window.confirm(`Cancel this ride? ${other} will be told it has been cancelled.`)) {
+      return;
+    }
 
     setCancelling(true);
     setActionError("");
 
     try {
       await api.requests.cancel(requestId);
-      onCancelled?.();
+      markNoticeSeen(cancelKey(requestId));
+      setOutcome({ kind: "cancelled", byOther: false, by: isDriver ? "driver" : "rider" });
     } catch (err) {
       setActionError(err.message);
       setCancelling(false);
     }
   };
+
+  const leave = () => {
+    if (outcome?.kind === "cancelled") onCancelled?.();
+    else onFinished?.();
+  };
+
+  const otherName = isDriver ? contact?.name || withName || "Your rider" : contact?.name || withName || "Your driver";
+
+  // Back from a trip that is over goes home; from one still running, to
+  // the list it was opened from.
+  const back = finished || outcome ? leave : onBack;
+
+  const outcomeView = outcome && !outcome.dismissed ? (
+    outcome.kind === "completed" ? (
+      // Just a message. "OK" leaves them here, on the trip summary with
+      // the fare and the rating; Back takes them home when they are ready.
+      <RideOutcome
+        kind="completed"
+        redirect={false}
+        title="Your ride is completed"
+        message={
+          `${isDriver ? "You dropped off" : "You've arrived with"} ${otherName}` +
+          (ride?.dropoff ? ` at ${ride.dropoff}` : "") +
+          (ride?.fare ? `. Your half: ${formatFare(ride.fare)}.` : ".") +
+          (isDriver
+            ? " You'll see here when they pay."
+            : " Tap OK to pay now by UPI or cash.")
+        }
+        onDone={() => setOutcome((o) => ({ ...o, dismissed: true }))}
+      />
+    ) : (
+      <RideOutcome
+        kind="cancelled"
+        title="Your ride has been cancelled"
+        message={
+          outcome.byOther
+            ? `${otherName} cancelled this ride.`
+            : `You cancelled this ride. ${otherName} has been told.`
+        }
+        onDone={leave}
+      />
+    )
+  ) : null;
 
   const recentre = () => {
     followRef.current = true;
@@ -844,7 +969,7 @@ export default function LiveRide({
   if (loadError) {
     return (
       <main className="page-shell">
-        <button className="secondary-button" onClick={onBack}>
+        <button className="secondary-button" onClick={back}>
           ← Back
         </button>
         <p className="form-error">{loadError}</p>
@@ -862,8 +987,10 @@ export default function LiveRide({
 
   return (
     <main className="page-shell live-ride">
+      {outcomeView}
+
       <header className="live-ride-head">
-        <button className="live-back" onClick={onBack}>
+        <button className="live-back" onClick={back}>
           ← Back
         </button>
 
@@ -986,7 +1113,7 @@ export default function LiveRide({
             </div>
 
             <div className="live-person-reach">
-              {requestId && (
+              {requestId && !finished && (
                 <button
                   type="button"
                   className="icon-button icon-button--badge"
@@ -1134,6 +1261,15 @@ export default function LiveRide({
               thing to decide about and a row of stars is a thing to tap.
               Both sides see it — the driver forms a view of their rider as
               surely as the rider does of them. */}
+          {/* Paying for the ride: UPI or cash, confirmed by the driver. */}
+          {finished && requestId && (
+            <PaymentPanel
+              tripId={requestId}
+              role={isDriver ? "driver" : "rider"}
+              otherName={otherName}
+            />
+          )}
+
           {finished && requestId && (
             <RatePanel
               tripId={requestId}
@@ -1195,12 +1331,31 @@ export default function LiveRide({
             </p>
           )}
 
-          {showChat && requestId && (
-            <TripChat
-              tripId={requestId}
-              withName={contact?.name || withName}
-              onUnreadChange={setUnread}
-            />
+          {/* A popup over the map, not a panel at the bottom of the sheet
+              where it opened out of sight below the scroll. */}
+          {showChat && requestId && !finished && (
+            <div
+              className="chat-modal-backdrop"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) setShowChat(false);
+              }}
+            >
+              <div className="chat-modal-card">
+                <button
+                  type="button"
+                  className="chat-modal-close"
+                  onClick={() => setShowChat(false)}
+                  aria-label="Close messages"
+                >
+                  ×
+                </button>
+                <TripChat
+                  tripId={requestId}
+                  withName={contact?.name || withName}
+                  onUnreadChange={setUnread}
+                />
+              </div>
+            </div>
           )}
 
           {/* Last, and quiet. Calling off a ride someone is driving to is
@@ -1209,7 +1364,9 @@ export default function LiveRide({
               things you hope never to need. */}
           {requestId && (
             <div className="live-quiet">
-              {!finished && (
+              {/* Either side can call the ride off at any time until it
+                  is completed; the other person is told straight away. */}
+              {!finished && !outcome && (
                 <button
                   type="button"
                   className="live-cancel"

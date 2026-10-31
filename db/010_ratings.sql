@@ -125,3 +125,7 @@ grant select on profile_ratings to anon, authenticated, service_role;
 --     left join profiles rater   on rater.id   = r.rater_id
 --     left join profiles subject on subject.id = r.subject_id
 --    order by r.created_at desc;
+
+-- Make the ratings table/view visible to PostgREST immediately after this
+-- migration is run from the Supabase SQL editor.
+notify pgrst, 'reload schema';

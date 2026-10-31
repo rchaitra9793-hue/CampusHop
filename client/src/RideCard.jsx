@@ -1,5 +1,6 @@
 import React from "react";
 import Stars from "./Stars";
+import MemberStats from "./MemberStats";
 import RouteIllustration from "./RouteIllustration";
 import { formatDistance, formatDuration } from "./lib/geo";
 import { formatFare, fareNote } from "./lib/fare";
@@ -110,7 +111,7 @@ export default function RideCard({ ride, onRequest, showMore = false, pending = 
         <div className="rider-info">
           <strong>{ride.name}</strong>
           <span>
-            {ride.role} · {ride.vehicle}
+            {ride.course ? `${ride.course} · ` : ''}{ride.role} · {ride.vehicle}
           </span>
 
           {/* The signal a rider actually wants when choosing between two
@@ -119,6 +120,9 @@ export default function RideCard({ ride, onRequest, showMore = false, pending = 
           {ride.rating != null && (
             <Stars value={ride.rating} count={ride.ratingCount} size="small" />
           )}
+
+          {/* Rides given, taken and km — a driver with a history. */}
+          <MemberStats stats={ride.driverStats} compact />
         </div>
 
         {showMore && <button className="more-button">•••</button>}
@@ -127,6 +131,7 @@ export default function RideCard({ ride, onRequest, showMore = false, pending = 
       <div className="ride-tags">
         <DayTag date={ride.date} />
         <ProximityTag meters={ride.distanceFromMe} />
+        {ride.vibe && <span className="vibe-chip">{({music:'🎧 Music',chatty:'💬 Chatty',quiet:'🤫 Quiet',study:'📚 Study talk',chai:'☕ Chai stop'})[ride.vibe]}</span>}
       </div>
 
       <RouteIllustration

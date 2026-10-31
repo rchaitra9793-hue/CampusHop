@@ -105,11 +105,19 @@ router.post("/", async (req, res, next) => {
  */
 router.get("/mine", async (req, res, next) => {
   try {
-    const { data: rows, error } = await db
+    let { data: rows, error } = await db
       .from("safety_reports")
-      .select("id, category, details, status, created_at, ride_id, request_id")
+      .select("id, category, details, status, created_at, ride_id, request_id, resolution, resolved_at, resolved_by")
       .eq("reporter_id", req.user.id)
       .order("created_at", { ascending: false });
+
+    if (error && /resolution|resolved_at|resolved_by/i.test(error.message || "")) {
+      ({ data: rows, error } = await db
+        .from("safety_reports")
+        .select("id, category, details, status, created_at, ride_id, request_id")
+        .eq("reporter_id", req.user.id)
+        .order("created_at", { ascending: false }));
+    }
 
     if (error) throw error;
 
@@ -118,6 +126,12 @@ router.get("/mine", async (req, res, next) => {
     const { data: rides } = rideIds.length
       ? await db.from("rides").select("id, pickup, dropoff, date").in("id", rideIds)
       : { data: [] };
+
+    const deciderIds = [...new Set((rows || []).map((r) => r.resolved_by).filter(Boolean))];
+    const { data: deciders } = deciderIds.length
+      ? await db.from("profiles").select("id,name").in("id", deciderIds)
+      : { data: [] };
+    const deciderMap = Object.fromEntries((deciders || []).map((p) => [p.id, p]));
 
     res.json({
       reports: (rows || []).map((r) => {
@@ -130,6 +144,9 @@ router.get("/mine", async (req, res, next) => {
           status: r.status,
           at: r.created_at,
           tripId: r.request_id,
+          resolution: r.resolution || null,
+          resolvedAt: r.resolved_at || null,
+          resolvedBy: r.resolved_by ? deciderMap[r.resolved_by]?.name || "CampusHop admin" : null,
 
           // The trip may have been deleted since; the report outlives it,
           // so say so rather than rendering a blank row.
@@ -161,6 +178,36 @@ router.get("/for/:requestId", async (req, res, next) => {
     if (error) throw error;
 
     res.json({ reports: data || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * DELETE /api/reports/:id
+ *
+ * Clearing one of your own reports from your profile, at any status.
+ * Clearing an open report withdraws it — the team no longer sees it.
+ */
+router.delete("/:id", async (req, res, next) => {
+  try {
+    const { data: report, error } = await db
+      .from("safety_reports")
+      .select("id, reporter_id, status")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!report || report.reporter_id !== req.user.id) {
+      return res.status(404).json({ error: "Report not found." });
+    }
+
+    const { error: deleteError } = await db.from("safety_reports").delete().eq("id", report.id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

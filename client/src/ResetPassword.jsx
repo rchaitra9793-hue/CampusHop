@@ -71,8 +71,8 @@ export default function ResetPassword({ onDone }) {
         <div className="auth-note">
           <div className="note-tape" />
           <p>
-            This link let you in once. Pick something you will remember and
-            you are done.
+            Your code checked out. Pick something you will remember and you
+            are done.
           </p>
           <span>then sign in as usual</span>
         </div>

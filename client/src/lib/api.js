@@ -65,6 +65,7 @@ export const api = {
     get: () => request("/profile").then((r) => r.user),
     create: (body) => request("/profile", { method: "POST", body }),
     update: (body) => request("/profile", { method: "PATCH", body }).then((r) => r.user),
+    remove: (password) => request("/profile", { method: "DELETE", body: { password } }),
   },
 
   rides: {
@@ -95,9 +96,23 @@ export const api = {
     setStatus: (id, status) =>
       request(`/requests/${id}`, { method: "PATCH", body: { status } }),
 
-    // Either side calling it off. Frees the seat and lets the rider ask
-    // again later, which a "cancelled" status would not.
+    // Either side calling it off, at any point until the trip is
+    // completed. Frees the seat; the other person is told it was cancelled.
     cancel: (id) => request(`/requests/${id}`, { method: "DELETE" }),
+
+    // Where one trip stands — status, who cancelled, and the ride's trip
+    // status. Polled by the live screen.
+    status: (id) => request(`/requests/${id}/status`),
+
+    // Settling up after the ride: the rider pays (UPI or cash), the driver
+    // confirms they received it.
+    payment: (id) => request(`/requests/${id}/payment`).then((r) => r.payment),
+    pay: (id, method) =>
+      request(`/requests/${id}/payment`, { method: "POST", body: { method } }).then((r) => r.payment),
+    confirmPayment: (id, received = true) =>
+      request(`/requests/${id}/payment/confirm`, { method: "POST", body: { received } }).then(
+        (r) => r.payment
+      ),
   },
 
   // Talking to the person you are travelling with, without either of you
@@ -120,6 +135,9 @@ export const api = {
     create: (body) => request("/reports", { method: "POST", body }),
     mine: () => request("/reports/mine").then((r) => r.reports),
     forTrip: (tripId) => request(`/reports/for/${tripId}`).then((r) => r.reports),
+
+    // Clearing a report the CampusHop team has already acted on.
+    remove: (id) => request(`/reports/${id}`, { method: "DELETE" }),
   },
 
   // The operations dashboard that arrived as its own project. These are
@@ -131,11 +149,13 @@ export const api = {
     users: (q = "") => request("/admin/users", { params: { q } }).then((r) => r.users),
     reports: (status = "") =>
       request("/admin/reports", { params: { status } }).then((r) => r.reports),
-    updateReport: (id, status) =>
-      request(`/admin/reports/${id}`, { method: "PATCH", body: { status } }).then(
-        (r) => r.report
-      ),
-    removeRide: (id) => request(`/admin/rides/${id}`, { method: "DELETE" }),
+    updateReport: (id, status, note = '') =>
+      request(`/admin/reports/${id}`, { method: "PATCH", body: { status, note } }).then((r) => r.report),
+    user: (id) => request(`/admin/users/${id}`),
+    warnUser: (id, reason) => request(`/admin/users/${id}/warn`, { method: "POST", body: { reason } }),
+    suspendUser: (id, reason) => request(`/admin/users/${id}/suspend`, { method: "POST", body: { reason } }),
+    reinstateUser: (id, note = '') => request(`/admin/users/${id}/reinstate`, { method: "POST", body: { note } }),
+    removeRide: (id, reason) => request(`/admin/rides/${id}`, { method: "DELETE", body: { reason } }),
   },
 
   // The console built in this repo: profiles.is_admin, the audit log,
@@ -150,10 +170,11 @@ export const api = {
         (r) => r.reports
       ),
 
-    setReportStatus: (id, status, note) =>
+    // `actions` is a list — several can be applied when resolving.
+    setReportStatus: (id, status, note, actions = []) =>
       request(`/admin-console/reports/${id}`, {
         method: "PATCH",
-        body: { status, note },
+        body: { status, note, actions },
       }).then((r) => r.report),
 
     users: (params) => request("/admin-console/users", { params }).then((r) => r.users),
@@ -204,6 +225,14 @@ export const api = {
   // sentence, from each side about the other. The server decides who a
   // rating is about — the client never names a subject, the same rule
   // reports follow.
+  community: {
+    overview: () => request("/community/overview"),
+    stats: () => request("/community/stats").then((r) => r.campus),
+    postWall: (body) => request("/community/wall", { method: "POST", body: { body } }),
+    deleteWall: (id) => request(`/community/wall/${id}`, { method: "DELETE" }),
+    ridePeople: (id) => request(`/community/rides/${id}/people`).then((r) => r.people),
+  },
+
   ratings: {
     create: (body) => request("/ratings", { method: "POST", body }),
 

@@ -33,6 +33,7 @@ export default function RatePanel({ tripId, role = "rider", withName, onSaved })
   const [editing, setEditing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [savedMessage, setSavedMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   const isDriver = role === "driver";
@@ -75,6 +76,7 @@ export default function RatePanel({ tripId, role = "rider", withName, onSaved })
 
     setSending(true);
     setError("");
+    setSavedMessage("");
 
     try {
       const rating = await api.ratings.create({
@@ -85,6 +87,7 @@ export default function RatePanel({ tripId, role = "rider", withName, onSaved })
 
       setSaved(rating.rating ?? { stars, comment });
       setEditing(false);
+      setSavedMessage("Saved — thanks for keeping the campus signal useful.");
       onSaved?.();
     } catch (err) {
       setError(err.message);
@@ -108,10 +111,12 @@ export default function RatePanel({ tripId, role = "rider", withName, onSaved })
           {saved.comment && <p className="rate-panel-said">“{saved.comment}”</p>}
         </div>
 
+        {savedMessage && <span className="rate-panel-success">{savedMessage}</span>}
+
         <button
           type="button"
           className="text-button"
-          onClick={() => setEditing(true)}
+          onClick={() => { setSavedMessage(""); setEditing(true); }}
         >
           Change
         </button>

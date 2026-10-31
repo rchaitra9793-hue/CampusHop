@@ -44,6 +44,43 @@ async function record(adminId, action, targetId, note) {
   }
 }
 
+// What resolving a report can do. `who` is whose account it acts on;
+// `needs` is what must still exist for it to work. `label` is the line the
+// reporter reads in the decision.
+const REPORT_ACTIONS = {
+  warn_user: { who: "subject", label: "The reported user was warned." },
+  suspend_user: { who: "subject", label: "The reported user was suspended." },
+  reinstate_user: { who: "subject", label: "The reported user's suspension was lifted." },
+  remove_user_rides: { who: "subject", label: "The reported user's upcoming rides were removed." },
+  remove_user_posts: { who: "subject", label: "The reported user's campus wall notes were removed." },
+  remove_ride: { needs: "ride", label: "The reported ride was removed." },
+  cancel_trip: { needs: "request", label: "The reported trip was cancelled." },
+  warn_reporter: { who: "reporter", label: "The person who filed this report was warned." },
+  suspend_reporter: { who: "reporter", label: "The person who filed this report was suspended." },
+};
+
+/** Take a ride off the board, with its requests, and log it. */
+async function removeRide(ride, adminId, note) {
+  const { data: riders } = await db
+    .from("trip_requests")
+    .select("status")
+    .eq("ride_id", ride.id);
+  const affected = (riders || []).filter((r) => r.status === "accepted").length;
+
+  const { error: requestError } = await db.from("trip_requests").delete().eq("ride_id", ride.id);
+  if (requestError) throw requestError;
+
+  const { error: deleteError } = await db.from("rides").delete().eq("id", ride.id);
+  if (deleteError) throw deleteError;
+
+  await record(
+    adminId,
+    "ride.delete",
+    ride.id,
+    `${ride.pickup} -> ${ride.dropoff}; ${note}${affected ? `; ${affected} accepted rider(s) affected` : ""}`
+  );
+}
+
 /** Names and emails for a set of profile ids, as a lookup. */
 async function profilesById(ids) {
   const wanted = [...new Set(ids.filter(Boolean))];
@@ -285,12 +322,23 @@ router.get("/reports", async (req, res, next) => {
       ridesById((rows || []).map((r) => r.ride_id)),
     ]);
 
+    // Which reported trips are still running, so "Cancel the trip" is only
+    // offered where there is something to cancel.
+    const requestIds = [...new Set((rows || []).map((r) => r.request_id).filter(Boolean))];
+    const { data: trips } = requestIds.length
+      ? await db.from("trip_requests").select("id, status").in("id", requestIds)
+      : { data: [] };
+    const cancellable = new Set(
+      (trips || []).filter((t) => ["pending", "accepted"].includes(t.status)).map((t) => t.id)
+    );
+
     res.json({
       reports: (rows || []).map((r) => {
         const ride = rides.get(r.ride_id);
 
         return {
           id: r.id,
+          tripCancellable: cancellable.has(r.request_id),
           category: r.category,
           details: r.details,
           status: r.status,
@@ -346,6 +394,23 @@ router.patch("/reports/:id", async (req, res, next) => {
         .json({ error: `status must be one of ${STATUSES.join(", ")}.` });
     }
 
+    // Several actions can be applied together. `action` (one string, with
+    // the old combined names) is still accepted from older clients.
+    const LEGACY = {
+      none: [],
+      warn_and_remove_ride: ["warn_user", "remove_ride"],
+      suspend_and_remove_ride: ["suspend_user", "remove_ride"],
+    };
+    const requested = Array.isArray(req.body?.actions)
+      ? req.body.actions
+      : LEGACY[req.body?.action] || (req.body?.action ? [req.body.action] : []);
+    const actions = [...new Set(requested.map(String))];
+
+    const unknown = actions.filter((a) => !REPORT_ACTIONS[a]);
+    if (unknown.length) {
+      return res.status(400).json({ error: `Invalid admin action: ${unknown.join(", ")}.` });
+    }
+
     const text = String(note || "").trim();
 
     if (text.length > NOTE_MAX) {
@@ -354,54 +419,181 @@ router.patch("/reports/:id", async (req, res, next) => {
         .json({ error: `Please keep the note under ${NOTE_MAX} characters.` });
     }
 
-    // Deciding one way or the other is the kind of thing somebody asks
-    // about months later, so it has to carry a reason.
     if ((status === "resolved" || status === "dismissed") && !text) {
       return res.status(400).json({
         error: "Say why — a resolved or dismissed report needs a note.",
       });
     }
 
-    const { data: before } = await db
+    if (status !== "resolved" && actions.length) {
+      return res.status(400).json({
+        error: "Actions are applied when resolving the case. Choose Resolve, or untick the actions.",
+      });
+    }
+
+    if (actions.includes("suspend_user") && actions.includes("reinstate_user")) {
+      return res.status(400).json({ error: "Choose either suspend or reinstate for the reported user, not both." });
+    }
+
+    const { data: before, error: beforeError } = await db
       .from("safety_reports")
-      .select("id, status")
+      .select("id, status, category, details, reporter_id, subject_id, ride_id, request_id")
       .eq("id", req.params.id)
       .maybeSingle();
 
+    if (beforeError) throw beforeError;
     if (!before) return res.status(404).json({ error: "No such report." });
 
+    // Everything is checked before anything is changed, so a refusal never
+    // leaves half the actions applied.
+    const targets = {};
+
+    for (const a of actions) {
+      const { who, needs } = REPORT_ACTIONS[a];
+
+      if (who) {
+        const id = who === "subject" ? before.subject_id : before.reporter_id;
+        if (!id) {
+          return res.status(400).json({ error: `This report has no ${who === "subject" ? "reported user" : "reporter"} to act on.` });
+        }
+        if (!targets[id]) {
+          const { data: target, error } = await db
+            .from("profiles")
+            .select("id, name, is_admin, suspended_at")
+            .eq("id", id)
+            .maybeSingle();
+          if (error) throw error;
+          if (!target) return res.status(404).json({ error: "That member no longer exists." });
+          targets[id] = target;
+        }
+        const target = targets[id];
+        if (target.id === req.user.id) {
+          return res.status(400).json({ error: "You cannot moderate your own account." });
+        }
+        if (target.is_admin && (a.startsWith("warn") || a.startsWith("suspend"))) {
+          return res.status(400).json({ error: "Administrators cannot be warned or suspended from a report." });
+        }
+        if (a === "reinstate_user" && !target.suspended_at) {
+          return res.status(400).json({ error: `${target.name || "That member"} is not suspended.` });
+        }
+      }
+
+      if (needs === "ride" && !before.ride_id) {
+        return res.status(400).json({ error: "The reported ride is no longer available." });
+      }
+      if (needs === "request" && !before.request_id) {
+        return res.status(400).json({ error: "The reported trip is no longer available." });
+      }
+    }
+
+    // Apply each action. If one fails, the report stays where it was rather
+    // than telling the reporter something was done that was not.
+    const done = [];
+
+    const suspend = async (id) => {
+      const { error } = await db
+        .from("profiles")
+        .update({ suspended_at: new Date().toISOString(), suspended_reason: text })
+        .eq("id", id);
+      if (error) throw error;
+      invalidateUser(id);
+      await record(req.user.id, "user.suspend", id, text);
+    };
+
+    for (const a of actions) {
+      if (a === "warn_user") {
+        await record(req.user.id, "user.warn", before.subject_id, text);
+      } else if (a === "warn_reporter") {
+        await record(req.user.id, "user.warn", before.reporter_id, text);
+      } else if (a === "suspend_user") {
+        await suspend(before.subject_id);
+      } else if (a === "suspend_reporter") {
+        await suspend(before.reporter_id);
+      } else if (a === "reinstate_user") {
+        const { error } = await db
+          .from("profiles")
+          .update({ suspended_at: null, suspended_reason: null })
+          .eq("id", before.subject_id);
+        if (error) throw error;
+        invalidateUser(before.subject_id);
+        await record(req.user.id, "user.reinstate", before.subject_id, text);
+      } else if (a === "remove_ride") {
+        const { data: ride, error: rideError } = await db
+          .from("rides")
+          .select("id, pickup, dropoff")
+          .eq("id", before.ride_id)
+          .maybeSingle();
+        if (rideError) throw rideError;
+        if (!ride) return res.status(404).json({ error: "The reported ride no longer exists." });
+        await removeRide(ride, req.user.id, text);
+      } else if (a === "remove_user_rides") {
+        const { data: rides, error } = await db
+          .from("rides")
+          .select("id, pickup, dropoff, trip_status")
+          .eq("driver_id", before.subject_id);
+        if (error) throw error;
+        // Upcoming or under way — finished trips stay for their history.
+        const live = (rides || []).filter((r) => r.trip_status !== "completed");
+        for (const ride of live) await removeRide(ride, req.user.id, text);
+      } else if (a === "remove_user_posts") {
+        const { data: gone, error } = await db
+          .from("campus_wall_posts")
+          .delete()
+          .eq("author_id", before.subject_id)
+          .select("id");
+        if (error) throw error;
+        await record(req.user.id, "wall.delete", before.subject_id, `${gone?.length || 0} note(s); ${text}`);
+      } else if (a === "cancel_trip") {
+        const { data: trip, error } = await db
+          .from("trip_requests")
+          .select("id, status")
+          .eq("id", before.request_id)
+          .maybeSingle();
+        if (error) throw error;
+        if (trip && ["pending", "accepted"].includes(trip.status)) {
+          // Cancelled on the driver's side, so the rider is told their ride
+          // was cancelled and the seat goes back on the board.
+          const { error: cancelError } = await db
+            .from("trip_requests")
+            .update({ status: "cancelled_by_driver" })
+            .eq("id", trip.id);
+          if (cancelError) throw cancelError;
+        }
+        await record(req.user.id, "trip.cancel", before.request_id, text);
+      }
+
+      done.push(a);
+    }
+
     const decided = status === "resolved" || status === "dismissed";
-
-    const patch = { status };
-
-    // 011 keeps the decision on the report. Reopening clears it, because
-    // a report that is open again has no decision — the audit log still
-    // remembers that it once did.
-    const withDecision = {
-      ...patch,
-      resolution: text || null,
+    const decisionText = decided
+      ? `${
+          done.length
+            ? done.map((a) => REPORT_ACTIONS[a].label).join(" ")
+            : "No further moderation action was taken."
+        }${text ? ` ${text}` : ""}`
+      : null;
+    const patch = {
+      status,
+      resolution: decisionText,
       resolved_at: decided ? new Date().toISOString() : null,
       resolved_by: decided ? req.user.id : null,
     };
 
     let { data, error } = await db
       .from("safety_reports")
-      .update(withDecision)
+      .update(patch)
       .eq("id", req.params.id)
-      .select("id, status")
+      .select("id, status, reporter_id, subject_id, resolution, resolved_at, resolved_by")
       .single();
 
-    // A database still waiting for 011 has none of those three columns.
-    // The status move is the part that matters and it should not fail
-    // over the record-keeping, so it is retried without them.
     if (error && missingDecisionColumns(error)) {
       warnAbout011();
-
       ({ data, error } = await db
         .from("safety_reports")
-        .update(patch)
+        .update({ status })
         .eq("id", req.params.id)
-        .select("id, status")
+        .select("id, status, reporter_id, subject_id")
         .single());
     }
 
@@ -411,10 +603,33 @@ router.patch("/reports/:id", async (req, res, next) => {
       req.user.id,
       "report.status",
       data.id,
-      `${before.status} -> ${status}${text ? `: ${text}` : ""}`
+      `${before.status} -> ${status}${done.length ? `; actions=${done.join(",")}` : ""}${text ? `: ${text}` : ""}`
     );
 
-    res.json({ report: { id: data.id, status: data.status } });
+    // Tell the person who raised the issue what happened. Email is optional;
+    // the in-app report history is the source of truth.
+    if (decided && before.reporter_id) {
+      const { data: decider } = await db.from("profiles").select("name").eq("id", req.user.id).maybeSingle();
+      const { data: reporter } = await db.from("profiles").select("name,email").eq("id", before.reporter_id).maybeSingle();
+      if (reporter?.email) {
+        email_.notifyReportDecision({
+          reporter,
+          category: before.category,
+          status,
+          resolution: decisionText,
+          decidedBy: decider?.name || "CampusHop admin",
+        });
+      }
+    }
+
+    res.json({
+      report: {
+        id: data.id,
+        status: data.status,
+        resolution: (data.resolution ?? decisionText) || null,
+        resolvedAt: data.resolved_at ?? null,
+      },
+    });
   } catch (err) {
     next(err);
   }

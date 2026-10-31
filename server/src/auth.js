@@ -1,5 +1,6 @@
 const { authClient, db } = require("./db");
 const { isAdmin: isPortalAdmin } = require("./admin");
+const { isCampusEmail, isEmailConfirmed } = require("./campusEmail");
 
 // Validating a token costs a round trip to Supabase, so recently seen
 // tokens are held briefly. Short enough that a sign-out takes effect
@@ -28,7 +29,7 @@ function cacheGet(token) {
 // routes/rides.js handles a database still waiting for 008.
 const ADMIN_COLUMNS = "is_admin, suspended_at, suspended_reason";
 const BASE_COLUMNS =
-  "name, role, pickup_point, vehicle, capacity, vehicle_number, phone";
+  "name, role, pickup_point, vehicle, capacity, vehicle_number, phone, course";
 
 // Retried rather than latched off for good: 009 gets run while the server
 // is up, and a permanent latch would leave administration dead until
@@ -46,39 +47,101 @@ function adminColumnsWorthTrying() {
   return true;
 }
 
-async function fetchProfile(userId) {
+async function fetchProfile(userId, authUser = {}) {
+  const fullColumns = `${BASE_COLUMNS}, ${ADMIN_COLUMNS}`;
+  const coreColumns = "name, role, pickup_point, vehicle, capacity";
+
   const read = (columns) =>
     db.from("profiles").select(columns).eq("id", userId).maybeSingle();
 
+  // First try the complete profile shape. If an optional migration is not
+  // installed yet, fall back to the original core profile rather than
+  // treating the account as if it did not exist.
   if (adminColumnsWorthTrying()) {
-    const { data, error } = await read(`${BASE_COLUMNS}, ${ADMIN_COLUMNS}`);
+    const { data, error } = await read(fullColumns);
 
     if (!error) {
       adminColumnsMissingSince = null;
       return data;
     }
 
-    // 42703 is "no such column": the migration has not been run here.
     const missingColumn =
-      error.code === "42703" || /is_admin|suspended_at/i.test(error.message || "");
+      error.code === "42703" ||
+      /is_admin|suspended_at|suspended_reason|vehicle_number|phone|course/i.test(
+        error.message || ""
+      );
 
     if (!missingColumn) return null;
 
     if (adminColumnsMissingSince == null) {
       console.warn(
-        "\n  db/009_admin.sql has not been run on this database.\n" +
-          "  The app works, but nobody can be an administrator and no\n" +
-          "  account can be suspended. Run the migration — this is\n" +
-          "  checked again in a minute, so no restart is needed.\n"
+        "\n  Some optional CampusHop profile columns are missing.\n" +
+          "  The app will keep working with the core profile until the\n" +
+          "  database migrations are applied.\n"
       );
     }
 
     adminColumnsMissingSince = Date.now();
   }
 
-  const { data } = await read(BASE_COLUMNS);
+  const { data: core, error: coreError } = await read(coreColumns);
+  if (coreError) return null;
 
-  return data;
+  if (!core) {
+    // Auth succeeded but the public profile row does not exist. Create the
+    // minimum valid profile now. PATCH /api/profile can then fill in the
+    // phone/vehicle/course fields during profile setup.
+    const { data: created, error: createError } = await db
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          name:
+            authUser.user_metadata?.name ||
+            authUser.email?.split("@")[0] ||
+            "Rider",
+          role: authUser.user_metadata?.role === "faculty" ? "faculty" : "student",
+          email: authUser.email || null,
+        },
+        { onConflict: "id" }
+      )
+      .select(coreColumns)
+      .single();
+
+    if (createError) {
+      console.warn("Could not create missing profile row:", createError.message);
+      return null;
+    }
+
+    return created;
+  }
+
+  return core;
+}
+
+/**
+ * Why a student or faculty account may not use the app, or null if it may.
+ *
+ * Either kind of administrator is exempt: listed in ADMIN_EMAILS /
+ * ADMIN_USER_IDS, or holding profiles.is_admin. The second is a plain
+ * read, never an insert.
+ */
+async function studentFacultyProblem(authUser) {
+  if (isCampusEmail(authUser.email) && isEmailConfirmed(authUser)) return null;
+
+  if (isPortalAdmin({ id: authUser.id, email: authUser.email })) return null;
+
+  const { data: row } = await db
+    .from("profiles")
+    .select("is_admin")
+    .eq("id", authUser.id)
+    .maybeSingle();
+
+  if (row?.is_admin === true) return null;
+
+  return isCampusEmail(authUser.email)
+    ? "Verify your email address before signing in."
+    : "CampusHop is only open to college email addresses ending in .edu.in.";
 }
 
 /**
@@ -112,9 +175,20 @@ async function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Your session has expired. Sign in again." });
   }
 
+  // Students and faculty get in only with a verified `.edu.in` address.
+  // Administrators are appointed separately and may be on any domain, so
+  // they are left out of this rule. Checked before fetchProfile, which
+  // would otherwise create a profile row for an account that should not
+  // exist.
+  const campusProblem = await studentFacultyProblem(data.user);
+
+  if (campusProblem) {
+    return res.status(403).json({ error: campusProblem });
+  }
+
   // Pull the profile so handlers have the display name and role without
   // trusting anything the client sent.
-  const profile = await fetchProfile(data.user.id);
+  const profile = await fetchProfile(data.user.id, data.user);
 
   const user = {
     id: data.user.id,
@@ -126,6 +200,7 @@ async function requireAuth(req, res, next) {
     capacity: profile?.capacity ?? null,
     vehicleNumber: profile?.vehicle_number ?? null,
     phone: profile?.phone ?? null,
+    course: profile?.course ?? null,
 
     // The privilege, read from the database and never from the request.
     // Deliberately not the `role` field above: that one is chosen by the

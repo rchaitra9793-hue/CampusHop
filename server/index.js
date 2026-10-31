@@ -13,6 +13,7 @@ const cors = require("cors");
 const config = require("./src/config");
 const { requireAuth, requireAdmin } = require("./src/auth");
 const { startRideSweeper } = require("./src/sweepRides");
+const { startReminderSweeper } = require("./src/reminders");
 
 const ridesRoutes = require("./src/routes/rides").router;
 const reportRoutes = require("./src/routes/reports").router;
@@ -33,8 +34,18 @@ const requestActionRoutes = require("./src/routes/requestActions");
 const adminRoutes = require("./src/routes/admin").router;
 const adminConsoleRoutes = require("./src/routes/adminConsole").router;
 const ratingRoutes = require("./src/routes/ratings").router;
+const communityRoutes = require("./src/routes/community").router;
 
 const app = express();
+
+// Every screen polls for live state (requests, trip status, cancellations).
+// A 304 answered from the browser cache can hand back a stale answer, so
+// API responses are never cached.
+app.set("etag", false);
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 
 app.use(cors({ origin: config.clientOrigin, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
@@ -80,6 +91,7 @@ app.use("/api/requests", requireAuth, requestRoutes);
 app.use("/api/profile", requireAuth, profileRoutes);
 app.use("/api/reports", requireAuth, reportRoutes);
 app.use("/api/ratings", requireAuth, ratingRoutes);
+app.use("/api/community", requireAuth, communityRoutes);
 
 // The operations dashboard, mounted exactly as its own project mounted
 // it: requireAuth only, because its router applies its own requireAdmin
@@ -152,4 +164,7 @@ app.listen(config.port, () => {
   // with rides nobody ever joined. On boot first, because a server that
   // was off overnight comes back to a table full of yesterday.
   startRideSweeper();
+
+  // Departure-day reminder emails to drivers and their riders.
+  startReminderSweeper();
 });

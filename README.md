@@ -118,7 +118,7 @@ that form can set.
 
 ### Database
 
-Run each file in `db/` once, in order, in the Supabase SQL editor:
+For a fresh or existing CampusHop database, run `db/FULL_CAMPUSHOP_SETUP.sql` once in the Supabase SQL editor. It applies all shipped migrations in order, repairs Auth users missing a profile row, and reloads PostgREST. The individual migration files remain in `db/` for reference.
 
 | File | What it adds |
 | --- | --- |
@@ -134,6 +134,7 @@ Run each file in `db/` once, in order, in the Supabase SQL editor:
 | `010_ratings.sql` | Five stars from each side of a trip about the other, and the average per person |
 | `011_admin_detail.sql` | The decision kept on the report itself, plus the indexes the admin queue reads by |
 | `012_admin_invites.sql` | Appointing an administrator at any address, confirmed by a code sent to it |
+| `013_campus_social.sql` | Course identity, ride vibes, Campus Wall |
 
 `db/backfill-routes.mjs` fills in routes for any rides created before
 coordinates were stored. It is a dry run unless given `--apply`.
@@ -478,3 +479,32 @@ Google is metered, and three things keep the volume down:
   re-asks the same question at most once.
 
 Set a budget alert in the Google Cloud console regardless.
+
+## CampusHop social layer
+
+This version adds the Campus side of the product:
+- Campus Network hub with passport, badges, connections and impact estimate
+- Campus Wall for short campus posts
+- Ride Vibe on offered rides
+- Course/branch identity in Settings and ride cards
+- People You'll Meet on ride details
+- Smart ride suggestions on the Campus page
+
+### Database
+Run `db/013_campus_social.sql` after the existing migrations (or use the appended section in `db/run_all.sql`).
+
+### Development
+The client intentionally resets the development session to the login screen on startup. Run the API and client as before.
+
+## UI refresh / database notes
+
+This version adds a new scrolling commuter home page with inline ride search,
+route-board cards, Campus Network, passport, ride-vibe and quick actions. The
+Find a ride page remains available from the top navigation for users who want
+the dedicated search screen.
+
+The ratings endpoint now uses an explicit update-or-insert flow and reports a
+specific setup message when the ratings schema is missing. If a database was
+created before ratings/social features were added, run `db/run_all.sql` in the
+Supabase SQL editor (or at minimum `db/010_ratings.sql` and
+`db/013_campus_social.sql`). Both migrations reload the PostgREST schema cache.

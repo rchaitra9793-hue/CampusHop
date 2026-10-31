@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReportTrip from "./ReportTrip";
 import Stars from "./Stars";
+import TripChat from "./TripChat";
 import { formatFare, fareNote } from "./lib/fare";
+import { statusLabel } from "./lib/rideNotices";
+import MemberStats from "./MemberStats";
 
 /**
  * The driver's full request queue.
@@ -18,12 +21,14 @@ export default function IncomingRequests({
   onAnswer,
   onAccepted,
   onOpenLive,
+  onCancel,
   nearby,
 }) {
   // The request a report is being written about, or null.
   const [reporting, setReporting] = useState(null);
 
   const [answering, setAnswering] = useState(null);
+  const [chatTrip, setChatTrip] = useState(null);
 
   const updateStatus = async (request, status) => {
     if (answering) return;
@@ -43,8 +48,21 @@ export default function IncomingRequests({
     }
   };
 
+  // Everything stays listed — finished trips included, so they can still
+  // be rated or reported. The server clears trips out once they are
+  // TRIP_HISTORY_DAYS (7) days old.
+  const active = requests;
+
   // Nothing to answer. Loading is not "nothing", and neither is an error.
-  const quiet = !loading && !error && requests.length === 0;
+  const quiet = !loading && !error && active.length === 0;
+
+  useEffect(() => {
+    if (!chatTrip) return;
+    const current = requests.find((r) => r.id === chatTrip.id);
+    if (current?.state === "finished") {
+      setChatTrip(null);
+    }
+  }, [requests, chatTrip]);
 
   const reportModal = reporting ? (
     <ReportTrip
@@ -58,6 +76,14 @@ export default function IncomingRequests({
   return (
     <>
       {reportModal}
+      {chatTrip && (
+        <div className="chat-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setChatTrip(null); }}>
+          <div className="chat-modal-card">
+            <button type="button" className="chat-modal-close" onClick={() => setChatTrip(null)} aria-label="Close messages">×</button>
+            <TripChat tripId={chatTrip.id} withName={chatTrip.riderName} />
+          </div>
+        </div>
+      )}
       <main className="page-shell">
       {/* Someone with nobody asking to ride with them is, on this page,
           almost always someone looking for a ride themselves. For them the
@@ -89,8 +115,8 @@ export default function IncomingRequests({
       )}
 
       <section className="trips-list">
-        {requests.map((r) => (
-          <article key={r.id} className={`trip-card trip-card--${r.status}`}>
+        {active.map((r) => (
+          <article key={r.id} className={`trip-card request-card trip-card--${r.status}`}>
             <div className="queue-position">
               <span>#{r.position}</span>
               <small>in line</small>
@@ -115,7 +141,7 @@ export default function IncomingRequests({
               <div>
                 <strong>{r.riderName}</strong>
                 <span>
-                  {r.status === "pending" ? "wants to join" : r.status} ·{" "}
+                  {r.status === "pending" ? "wants to join" : statusLabel(r.status)} ·{" "}
                   {new Date(r.createdAt).toLocaleString([], {
                     day: "numeric",
                     month: "short",
@@ -134,34 +160,49 @@ export default function IncomingRequests({
                     size="small"
                   />
                 )}
+
+                {/* Their track record, where the driver decides. */}
+                <MemberStats stats={r.riderStats} compact />
+
+                {r.status === "accepted" && r.paymentStatus && r.state === "finished" && (
+                  <span className={`pay-chip pay-chip--${r.paymentStatus}`}>
+                    {r.paymentStatus === "confirmed"
+                      ? `Paid${r.paymentMethod ? ` · ${r.paymentMethod.toUpperCase()}` : ""}`
+                      : r.paymentStatus === "paid"
+                        ? "Rider says paid — confirm"
+                        : "Not paid yet"}
+                  </span>
+                )}
               </div>
             </div>
 
             <span
               className={`status-badge status-${r.expired ? "expired" : r.status}`}
             >
-              {r.expired ? "expired" : r.status}
+              {r.expired ? "expired" : statusLabel(r.status)}
             </span>
 
             {/* The driver sees exactly what the rider sees. Two different
                 numbers is how an argument at the kerb starts — and with a
                 split there is only one number anyway: they each carry the
                 same half of what the journey costs. */}
-            {r.fare && (
-              <p className="ride-fare ride-fare--inline">
-                <strong>{formatFare(r.fare)}</strong>
-                <span>{fareNote(r.fare)} · each</span>
-              </p>
-            )}
+            {/* Fare and rating share one row, side by side, rather than
+                two elements drawn into the same grid cell on top of each
+                other. */}
+            <div className="request-meta">
+              {r.fare && (
+                <p className="ride-fare ride-fare--inline">
+                  <strong>{formatFare(r.fare)}</strong>
+                  <span>{fareNote(r.fare)} · each</span>
+                </p>
+              )}
 
-            {/* What this driver gave them. A line of text, not a control:
-                the rating is given on the end-of-ride screen, and this is
-                only the queue remembering that it was. */}
-            {r.myRating != null && (
-              <p className="trip-rated">
-                You rated this <Stars value={r.myRating} size="small" />
-              </p>
-            )}
+              {r.myRating != null && (
+                <p className="trip-rated">
+                  You rated this <Stars value={r.myRating} size="small" />
+                </p>
+              )}
+            </div>
 
             {r.status === "accepted" && (
               <div className="modal-actions">
@@ -206,12 +247,32 @@ export default function IncomingRequests({
                 {/* A driver has the same right to report a trip as the
                     rider does: someone who never turned up, or who behaved
                     badly in the vehicle, is the driver's problem to raise. */}
+                {r.state !== "finished" && (
+                  <button
+                    className="secondary-button request-message-button"
+                    onClick={() => setChatTrip(r)}
+                  >
+                    💬 Message {r.riderName}
+                  </button>
+                )}
+
                 <button
                   className="secondary-button"
                   onClick={() => setReporting(r)}
                 >
                   Report a problem
                 </button>
+
+                {/* The driver can call the ride off at any time until it
+                    is completed; the rider is told straight away. */}
+                {r.state !== "finished" && r.tripStatus !== "completed" && onCancel && (
+                  <button
+                    className="danger-button"
+                    onClick={() => onCancel(r)}
+                  >
+                    Cancel ride
+                  </button>
+                )}
               </div>
             )}
 

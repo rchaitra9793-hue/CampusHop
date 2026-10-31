@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { ratingsFor, myRatings } = require("../ratings");
+const { statsFor, missingColumns } = require("../memberStats");
 const notify = require("../email");
 const config = require("../config");
 const { fareDetail } = require("../pricing");
@@ -9,6 +10,16 @@ const { departed, departureIso, departureInstant } = require("../expiry");
 const router = express.Router();
 
 const STATUSES = ["pending", "accepted", "declined"];
+
+// A confirmed seat that one side called off. Kept as a row, rather than
+// deleted, so the other person can be told it was cancelled and by whom.
+const CANCELLED = { rider: "cancelled_by_rider", driver: "cancelled_by_driver" };
+
+function cancelledBy(status) {
+  if (status === CANCELLED.rider) return "rider";
+  if (status === CANCELLED.driver) return "driver";
+  return null;
+}
 
 /**
  * The ride as a notification needs to describe it, plus how full it is.
@@ -173,6 +184,7 @@ const RUNNING = ["to_pickup", "arrived", "started"];
 
 function tripState(request, ride) {
   if (request.status === "declined") return "declined";
+  if (cancelledBy(request.status)) return "cancelled";
 
   // The ride itself is gone — the driver withdrew it. There is nothing
   // left to track, view or turn up for, so it cannot sit in Upcoming
@@ -210,7 +222,7 @@ function tripState(request, ride) {
 }
 
 // Live first, then what is coming, then what is over.
-const STATE_ORDER = { live: 0, upcoming: 1, finished: 2, declined: 3 };
+const STATE_ORDER = { live: 0, upcoming: 1, finished: 2, cancelled: 3, declined: 4 };
 
 /**
  * The order a rider actually wants: the trip happening now at the top,
@@ -228,7 +240,7 @@ function byUrgency(a, b) {
   const at = Date.parse(a.departsAt) || 0;
   const bt = Date.parse(b.departsAt) || 0;
 
-  const done = a.state === "finished" || a.state === "declined";
+  const done = ["finished", "cancelled", "declined"].includes(a.state);
 
   return done ? bt - at : at - bt;
 }
@@ -276,6 +288,9 @@ router.get("/mine", async (req, res, next) => {
       return {
         tripId: r.id,
         status: r.status,
+        cancelledBy: cancelledBy(r.status),
+        paymentStatus: r.payment_status ?? null,
+        paymentMethod: r.payment_method ?? null,
         rideId: r.ride_id,
         requestedAt: r.created_at,
 
@@ -387,9 +402,10 @@ router.get("/incoming", async (req, res, next) => {
 
     // A driver is rated and does the rating, both. Same two reads as the
     // rider's list, pointed the other way.
-    const [riderRatings, mine] = await Promise.all([
+    const [riderRatings, mine, riderStats] = await Promise.all([
       ratingsFor(riderIds),
       myRatings(req.user.id, reqs.map((r) => r.id)),
+      statsFor(riderIds),
     ]);
 
     // Queue position is per ride: "2nd in line for the 8:30 to campus",
@@ -415,6 +431,12 @@ router.get("/incoming", async (req, res, next) => {
       return {
         id: r.id,
         status: r.status,
+        cancelledBy: cancelledBy(r.status),
+        paymentStatus: r.payment_status ?? null,
+        paymentMethod: r.payment_method ?? null,
+
+        // The rider's track record, on the card where the driver decides.
+        riderStats: riderStats[r.rider_id] ?? null,
         createdAt: r.created_at,
 
         // Carries the departure as an instant, like every other ride the
@@ -503,7 +525,16 @@ router.post("/", async (req, res, next) => {
       .eq("rider_id", req.user.id)
       .maybeSingle();
 
-    if (existing) {
+    // A seat that was cancelled earlier can be asked for again. The old
+    // row goes first, since the unique index allows one per rider.
+    if (existing && cancelledBy(existing.status)) {
+      const { error: clearError } = await db
+        .from("trip_requests")
+        .delete()
+        .eq("id", existing.id);
+
+      if (clearError) throw clearError;
+    } else if (existing) {
       return res
         .status(409)
         .json({ error: `You have already requested this ride (${existing.status}).` });
@@ -631,10 +662,12 @@ router.patch("/:id", async (req, res, next) => {
 /**
  * DELETE /api/requests/:id — call it off.
  *
- * Either side may. A rider changes their plans; a driver drops someone
- * they had accepted. The row is removed rather than marked cancelled,
- * which frees the seat and — because of the unique index on
- * (ride_id, rider_id) — leaves the rider free to ask again later.
+ * Either side may cancel at any point until the trip is completed. A rider
+ * withdrawing a request nobody has answered simply removes it. Anything
+ * else — a confirmed seat, or a driver turning away a waiting rider — is
+ * marked cancelled_by_rider / cancelled_by_driver instead, so the other
+ * person is told their ride was cancelled rather than finding it gone.
+ * Either way the seat goes back on the board.
  */
 router.delete("/:id", async (req, res, next) => {
   try {
@@ -649,7 +682,7 @@ router.delete("/:id", async (req, res, next) => {
 
     const { data: ride } = await db
       .from("rides")
-      .select("driver_id")
+      .select("driver_id, trip_status")
       .eq("id", request.ride_id)
       .maybeSingle();
 
@@ -662,11 +695,31 @@ router.delete("/:id", async (req, res, next) => {
         .json({ error: "Only the rider or the driver can cancel this." });
     }
 
-    const { error } = await db.from("trip_requests").delete().eq("id", req.params.id);
+    const by = isRider ? "rider" : "driver";
+
+    if (cancelledBy(request.status)) {
+      return res.json({ ok: true, cancelledBy: cancelledBy(request.status) });
+    }
+
+    if (request.status === "declined") {
+      return res.status(409).json({ error: "This request was already declined." });
+    }
+
+    if (ride?.trip_status === "completed" && request.status === "accepted") {
+      return res.status(409).json({ error: "This ride is already completed." });
+    }
+
+    const { error } =
+      isRider && request.status === "pending"
+        ? await db.from("trip_requests").delete().eq("id", req.params.id)
+        : await db
+            .from("trip_requests")
+            .update({ status: CANCELLED[by] })
+            .eq("id", req.params.id);
 
     if (error) throw error;
 
-    res.json({ ok: true, cancelledBy: isRider ? "rider" : "driver" });
+    res.json({ ok: true, cancelledBy: by });
 
     // Only a seat that was actually confirmed is worth an email. Calling
     // off a request nobody had answered yet is not news to anyone: the
@@ -685,6 +738,234 @@ router.delete("/:id", async (req, res, next) => {
         )
         .catch((err) => console.error("Cancellation email failed:", err.message));
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/requests/:id/status
+ *
+ * Where one trip stands, for either person on it. The live screen polls
+ * this so both sides learn straight away that the ride was completed or
+ * cancelled. A row that no longer exists reads as cancelled — a rider
+ * withdrawing an unanswered request removes it outright.
+ */
+router.get("/:id/status", async (req, res, next) => {
+  try {
+    const { data: request, error } = await db
+      .from("trip_requests")
+      .select("id, ride_id, rider_id, status")
+      .eq("id", req.params.id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!request) {
+      return res.json({ status: "gone", cancelledBy: null, tripStatus: null });
+    }
+
+    const { data: ride } = await db
+      .from("rides")
+      .select("driver_id, trip_status")
+      .eq("id", request.ride_id)
+      .maybeSingle();
+
+    if (request.rider_id !== req.user.id && ride?.driver_id !== req.user.id) {
+      return res.status(404).json({ error: "No such trip." });
+    }
+
+    res.json({
+      status: request.status,
+      cancelledBy: cancelledBy(request.status),
+      tripStatus: ride ? ride.trip_status || "scheduled" : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- paying for the ride -------------------------------------------------
+//
+// After the trip is completed the rider settles their half with the driver,
+// by UPI or in cash. The rider marks it paid; the driver confirms they got
+// it (or says they did not, which sends it back to unpaid). Money never
+// passes through CampusHop — UPI goes straight to the driver's own UPI ID.
+
+const PAYMENT_METHODS = ["upi", "cash"];
+
+const SETUP_NEEDED = {
+  error:
+    "Payments are not set up on this database yet. Run db/014_payments_stats_reminders.sql in the Supabase SQL editor.",
+  setupNeeded: true,
+};
+
+/** The request, its ride and driver, and who is asking — or an error response. */
+async function paymentContext(requestId, userId) {
+  const { data: request, error } = await db
+    .from("trip_requests")
+    .select("id, ride_id, rider_id, status, payment_status, payment_method, paid_at, payment_confirmed_at")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (missingColumns(error) || /payment_/i.test(error?.message || "")) return { fail: [503, SETUP_NEEDED] };
+  if (error) throw error;
+  if (!request) return { fail: [404, { error: "No such trip." }] };
+
+  const { data: ride } = await db
+    .from("rides")
+    .select("id, driver_id, trip_status, vehicle, distance_meters")
+    .eq("id", request.ride_id)
+    .maybeSingle();
+
+  if (!ride) return { fail: [404, { error: "That ride no longer exists." }] };
+
+  const role =
+    ride.driver_id === userId ? "driver" : request.rider_id === userId ? "rider" : null;
+
+  if (!role) return { fail: [404, { error: "No such trip." }] };
+
+  let { data: driver, error: driverError } = await db
+    .from("profiles")
+    .select("name, upi_id")
+    .eq("id", ride.driver_id)
+    .maybeSingle();
+
+  if (driverError) {
+    ({ data: driver } = await db.from("profiles").select("name").eq("id", ride.driver_id).maybeSingle());
+  }
+
+  return { request, ride, role, driver: driver || {} };
+}
+
+/** The best way to pay, and why — said plainly to both sides. */
+function recommendMethod(driver, amount) {
+  const name = driver?.name || "the driver";
+
+  if (driver?.upi_id) {
+    return {
+      method: "upi",
+      reason: `UPI is best: ₹${amount} goes straight to ${name}'s UPI ID, it's the exact amount so nobody needs change, and you both get a record of it.`,
+    };
+  }
+
+  return {
+    method: "cash",
+    reason: `${name} hasn't added a UPI ID yet, so cash is simplest. Keep ₹${amount} ready — exact change helps.`,
+  };
+}
+
+function paymentOut({ request, ride, role, driver }) {
+  const fare = fareDetail(ride.vehicle, ride.distance_meters);
+  const amount = fare?.amount ?? null;
+  const completed = ride.trip_status === "completed";
+
+  return {
+    role,
+    amount,
+    fare,
+    status: request.payment_status || "unpaid",
+    method: request.payment_method || null,
+    paidAt: request.paid_at || null,
+    confirmedAt: request.payment_confirmed_at || null,
+    driverName: driver.name || "Driver",
+    driverUpi: driver.upi_id || null,
+    recommended: amount != null ? recommendMethod(driver, amount) : null,
+    tripCompleted: completed,
+    canPay: completed && request.status === "accepted" && amount != null,
+  };
+}
+
+/** GET /api/requests/:id/payment — where settling up stands. */
+router.get("/:id/payment", async (req, res, next) => {
+  try {
+    const ctx = await paymentContext(req.params.id, req.user.id);
+    if (ctx.fail) return res.status(ctx.fail[0]).json(ctx.fail[1]);
+
+    res.json({ payment: paymentOut(ctx) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/requests/:id/payment — the rider says they paid, by UPI or cash. */
+router.post("/:id/payment", async (req, res, next) => {
+  try {
+    const method = String(req.body?.method || "");
+
+    if (!PAYMENT_METHODS.includes(method)) {
+      return res.status(400).json({ error: "Choose UPI or cash." });
+    }
+
+    const ctx = await paymentContext(req.params.id, req.user.id);
+    if (ctx.fail) return res.status(ctx.fail[0]).json(ctx.fail[1]);
+
+    const out = paymentOut(ctx);
+
+    if (ctx.role !== "rider") {
+      return res.status(403).json({ error: "Only the rider marks a payment as made." });
+    }
+    if (!out.canPay) {
+      return res.status(409).json({ error: "You can pay once the driver has completed the ride." });
+    }
+    if (out.status === "confirmed") {
+      return res.status(409).json({ error: "The driver has already confirmed this payment." });
+    }
+    if (method === "upi" && !out.driverUpi) {
+      return res.status(400).json({ error: `${out.driverName} hasn't added a UPI ID. Pay in cash instead.` });
+    }
+
+    const { error } = await db
+      .from("trip_requests")
+      .update({ payment_status: "paid", payment_method: method, paid_at: new Date().toISOString() })
+      .eq("id", ctx.request.id);
+
+    if (error) throw error;
+
+    const fresh = await paymentContext(req.params.id, req.user.id);
+    res.json({ payment: paymentOut(fresh) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/requests/:id/payment/confirm — the driver received it.
+ * Body: { received: true | false, method? }. `received: false` sends a
+ * payment the rider marked by mistake back to unpaid.
+ */
+router.post("/:id/payment/confirm", async (req, res, next) => {
+  try {
+    const ctx = await paymentContext(req.params.id, req.user.id);
+    if (ctx.fail) return res.status(ctx.fail[0]).json(ctx.fail[1]);
+
+    const out = paymentOut(ctx);
+
+    if (ctx.role !== "driver") {
+      return res.status(403).json({ error: "Only the driver confirms a payment." });
+    }
+    if (!out.canPay) {
+      return res.status(409).json({ error: "Payments can be confirmed once the ride is completed." });
+    }
+
+    const received = req.body?.received !== false;
+    const method = PAYMENT_METHODS.includes(req.body?.method) ? req.body.method : null;
+    const now = new Date().toISOString();
+
+    const patch = received
+      ? {
+          payment_status: "confirmed",
+          payment_method: out.method || method || "cash",
+          paid_at: out.paidAt || now,
+          payment_confirmed_at: now,
+        }
+      : { payment_status: "unpaid", payment_method: null, paid_at: null, payment_confirmed_at: null };
+
+    const { error } = await db.from("trip_requests").update(patch).eq("id", ctx.request.id);
+    if (error) throw error;
+
+    const fresh = await paymentContext(req.params.id, req.user.id);
+    res.json({ payment: paymentOut(fresh) });
   } catch (err) {
     next(err);
   }
@@ -719,18 +1000,18 @@ async function threadAccess(requestId, userId) {
 
   const { data: ride } = await db
     .from("rides")
-    .select("id, driver_id, pickup, dropoff")
+    .select("id, driver_id, pickup, dropoff, trip_status")
     .eq("id", request.ride_id)
     .maybeSingle();
 
   if (!ride) return null;
 
   if (ride.driver_id === userId) {
-    return { request, ride, role: "driver", otherId: request.rider_id };
+    return { request, ride, role: "driver", otherId: request.rider_id, finished: ride.trip_status === "completed" };
   }
 
   if (request.rider_id === userId) {
-    return { request, ride, role: "rider", otherId: ride.driver_id };
+    return { request, ride, role: "rider", otherId: ride.driver_id, finished: ride.trip_status === "completed" };
   }
 
   return null;
@@ -763,6 +1044,12 @@ router.get("/:id/messages", async (req, res, next) => {
       return res
         .status(403)
         .json({ error: "Messages open once the seat is accepted." });
+    }
+
+    if (access.finished) {
+      return res
+        .status(410)
+        .json({ error: "This trip is complete. Messages are now closed; your conversation remains in trip history." });
     }
 
     const { data: rows, error } = await db
@@ -835,6 +1122,12 @@ router.post("/:id/messages", async (req, res, next) => {
         .json({ error: "Messages open once the seat is accepted." });
     }
 
+    if (access.finished) {
+      return res
+        .status(410)
+        .json({ error: "This trip is complete. Messages are now closed; your conversation remains in trip history." });
+    }
+
     const { data, error } = await db
       .from("trip_messages")
       .insert({ request_id: req.params.id, sender_id: req.user.id, body })
@@ -859,27 +1152,47 @@ router.post("/:id/messages", async (req, res, next) => {
  */
 router.get("/unread", async (req, res, next) => {
   try {
-    // Every trip this person is on, from either side.
-    const { data: mine } = await db
+    // Completed trips keep their messages for history, but they are no
+    // longer active chat threads and therefore never contribute badges.
+    const { data: riderRequests } = await db
       .from("trip_requests")
-      .select("id")
+      .select("id, ride_id")
       .eq("rider_id", req.user.id)
       .eq("status", "accepted");
+
+    const riderRideIds = [...new Set((riderRequests || []).map((r) => r.ride_id).filter(Boolean))];
+    const { data: activeRiderRides } = riderRideIds.length
+      ? await db
+          .from("rides")
+          .select("id")
+          .in("id", riderRideIds)
+          .neq("trip_status", "completed")
+      : { data: [] };
+
+    const activeRiderRideIds = new Set((activeRiderRides || []).map((r) => r.id));
+    const riderIds = (riderRequests || [])
+      .filter((r) => activeRiderRideIds.has(r.ride_id))
+      .map((r) => r.id);
 
     const { data: myRides } = await db
       .from("rides")
       .select("id")
-      .eq("driver_id", req.user.id);
+      .eq("driver_id", req.user.id)
+      .neq("trip_status", "completed");
 
-    const { data: onMyRides } = myRides?.length
+    const driverRideIds = (myRides || []).map((r) => r.id);
+    const { data: onMyRides } = driverRideIds.length
       ? await db
           .from("trip_requests")
           .select("id")
-          .in("ride_id", myRides.map((r) => r.id))
+          .in("ride_id", driverRideIds)
           .eq("status", "accepted")
       : { data: [] };
 
-    const ids = [...new Set([...(mine || []), ...(onMyRides || [])].map((r) => r.id))];
+    const ids = [...new Set([
+      ...riderIds,
+      ...(onMyRides || []).map((r) => r.id),
+    ])];
 
     if (!ids.length) return res.json({ unread: {}, total: 0 });
 
@@ -894,10 +1207,7 @@ router.get("/unread", async (req, res, next) => {
     const unread = {};
 
     for (const row of rows || []) {
-      // Your own unread message is one the other person has not opened —
-      // not something waiting for you.
       if (row.sender_id === req.user.id) continue;
-
       unread[row.request_id] = (unread[row.request_id] || 0) + 1;
     }
 

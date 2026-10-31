@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import campushopLogo from "./assets/campushop-logo.png";
 import { supabase } from "./supabaseClient";
-import { api } from "./lib/api";
+import { isCampusEmail, CAMPUS_EMAIL_ERROR } from "./lib/campusEmail";
 import PasswordField from "./PasswordField";
 
 export default function RegisterPage({ onBack, onComplete }) {
@@ -14,19 +14,32 @@ export default function RegisterPage({ onBack, onComplete }) {
     setError("");
     setLoading(true);
 
-    const name = e.target.name.value;
-    const email = e.target.email.value;
+    const name = e.target.name.value.trim();
+    const email = e.target.email.value.trim().toLowerCase();
     const password = e.target.password.value;
 
-    if (!email.toLowerCase().endsWith(".edu.in")) {
-      setError("Please use your college email address (must end with .edu.in)");
+    if (!isCampusEmail(email)) {
+      setError(CAMPUS_EMAIL_ERROR);
       setLoading(false);
       return;
     }
 
+    if (password.length < 8) {
+      setError("Use at least 8 characters for your password.");
+      setLoading(false);
+      return;
+    }
+
+    // Supabase Auth emails the verification code. Name and role ride along
+    // as metadata so the server can still build the profile if the person
+    // confirms later from the sign-in page.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { name, role },
+        emailRedirectTo: `${window.location.origin}/`,
+      },
     });
 
     if (signUpError) {
@@ -35,18 +48,21 @@ export default function RegisterPage({ onBack, onComplete }) {
       return;
     }
 
-    const userId = data.user.id;
-
-    try {
-      await api.profile.create({ name, role });
-    } catch (err) {
-      setError(err.message);
+    // A session straight away means Supabase confirmed the address without
+    // asking — "Confirm email" is off in the project. That would let an
+    // unverified address in, so it is refused rather than used.
+    if (data.session) {
+      await supabase.auth.signOut();
+      setError(
+        "Email verification is turned off for this project. Turn on " +
+          "\"Confirm email\" in Supabase → Authentication → Sign In / Providers → Email."
+      );
       setLoading(false);
       return;
     }
 
     setLoading(false);
-    onComplete({ id: userId, name, role, email });
+    onComplete({ email, name, role });
   };
 
   return (
@@ -186,7 +202,7 @@ export default function RegisterPage({ onBack, onComplete }) {
 
           <p className="verification-note">
             <span>✓</span>
-            Your campus email will be verified before access is granted.
+            We'll email a verification code to your campus address.
           </p>
         </div>
       </section>

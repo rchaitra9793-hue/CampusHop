@@ -1,633 +1,503 @@
--- CampusHop: every migration, in order, in one run.
---
--- Paste this whole file into the Supabase SQL editor and run it once.
--- Every statement is idempotent, so running it again is harmless — use
--- it to bring a database up to date whatever state it is starting from.
---
--- The individual files (001 … 004) are kept alongside this one for
--- reference; this is only their contents concatenated.
-
-
 -- ============================================================
--- 001 — store real road routes on each ride
+-- CAMPUSHOP — FULL DATABASE SETUP / REPAIR
 -- ============================================================
 --
--- The route is computed once, when a driver posts a ride, and saved here.
--- Browsing the ride board then costs zero routing API calls.
-
-alter table rides
-  add column if not exists pickup_lat       double precision,
-  add column if not exists pickup_lng       double precision,
-  add column if not exists dropoff_lat      double precision,
-  add column if not exists dropoff_lng      double precision,
-  add column if not exists route_geometry   jsonb,
-  add column if not exists distance_meters  integer,
-  add column if not exists duration_seconds integer;
-
-
--- ============================================================
--- 002 — one request per rider, per ride
--- ============================================================
+-- Run this ONE file in Supabase SQL Editor.
 --
--- The API already refuses a second request, but that check and the insert
--- are two separate round trips: two clicks landing at the same moment can
--- both pass it. This index is what actually makes it impossible.
-
--- Collapse any duplicates that already exist, keeping the earliest — the
--- request that genuinely came first. The index cannot be created while
--- duplicate rows are still present.
-delete from trip_requests a
-using trip_requests b
-where a.ride_id = b.ride_id
-  and a.rider_id = b.rider_id
-  and a.created_at > b.created_at;
-
-create unique index if not exists trip_requests_one_per_rider
-  on trip_requests (ride_id, rider_id);
-
--- Requests are answered oldest-first, so the driver's queue is ordered by
--- arrival. This index keeps that read cheap.
-create index if not exists trip_requests_ride_created
-  on trip_requests (ride_id, created_at);
-
-
--- ============================================================
--- 003 — the vehicle a driver actually turns up in
--- ============================================================
+-- IMPORTANT:
+-- The original/base CampusHop schema must already contain:
+--   public.profiles
+--   public.rides
+--   public.trip_requests
 --
--- A rider standing on a kerb needs to know which car is theirs. The
--- profile already said "car"; it never said which one.
-
-alter table profiles
-  add column if not exists vehicle_number text;
-
-
--- ============================================================
--- 004 — a number to ring
--- ============================================================
+-- This file applies every migration shipped with the current app in order,
+-- repairs profiles that exist in Supabase Auth but not in public.profiles,
+-- installs a trigger so new Auth accounts always get a profile row, and
+-- reloads PostgREST's schema cache.
 --
--- Only ever shown between a driver and a rider whose request has been
--- accepted. Browsing the board never reveals one.
+-- Safe to run more than once.
+-- ============================================================
 
-alter table profiles
-  add column if not exists phone text;
+DO $$
+BEGIN
+  IF to_regclass('public.profiles') IS NULL THEN
+    RAISE EXCEPTION
+      'CampusHop base schema missing: public.profiles does not exist.';
+  END IF;
+
+  IF to_regclass('public.rides') IS NULL THEN
+    RAISE EXCEPTION
+      'CampusHop base schema missing: public.rides does not exist.';
+  END IF;
+
+  IF to_regclass('public.trip_requests') IS NULL THEN
+    RAISE EXCEPTION
+      'CampusHop base schema missing: public.trip_requests does not exist.';
+  END IF;
+END $$;
 
 
 -- ============================================================
--- 005 — live tracking
+-- 001 ROUTE COLUMNS
 -- ============================================================
---
--- Where the driver is, and how far along the trip is. Read back only by
--- the riders they have accepted; the API enforces that, not the client.
 
-alter table rides
-  add column if not exists live_lat     double precision,
-  add column if not exists live_lng     double precision,
-  add column if not exists live_heading double precision,
-  add column if not exists live_at      timestamptz,
-
-  -- scheduled -> to_pickup -> arrived -> started -> completed
-  add column if not exists trip_status  text default 'scheduled';
-
-create index if not exists rides_driver_trip_status
-  on rides (driver_id, trip_status);
+ALTER TABLE public.rides
+  ADD COLUMN IF NOT EXISTS pickup_lat       double precision,
+  ADD COLUMN IF NOT EXISTS pickup_lng       double precision,
+  ADD COLUMN IF NOT EXISTS dropoff_lat      double precision,
+  ADD COLUMN IF NOT EXISTS dropoff_lng      double precision,
+  ADD COLUMN IF NOT EXISTS route_geometry   jsonb,
+  ADD COLUMN IF NOT EXISTS distance_meters  integer,
+  ADD COLUMN IF NOT EXISTS duration_seconds integer;
 
 
 -- ============================================================
--- 006 — an address to notify people at
+-- 002 ONE REQUEST PER RIDER / RIDE
 -- ============================================================
---
--- Notifications are about reaching the *other* person: the driver who is
--- not looking at the app when a seat is requested, the rider waiting on
--- an answer. The API can read the caller's own email from their token,
--- but never anybody else's, so each profile carries its owner's address.
--- It is written from the verified token, never the request body.
 
-alter table profiles
-  add column if not exists email text;
+DELETE FROM public.trip_requests a
+USING public.trip_requests b
+WHERE a.ride_id = b.ride_id
+  AND a.rider_id = b.rider_id
+  AND a.created_at > b.created_at;
 
-create index if not exists profiles_email_idx on profiles (email);
+CREATE UNIQUE INDEX IF NOT EXISTS trip_requests_one_per_rider
+  ON public.trip_requests (ride_id, rider_id);
 
--- 007 — messages, and reporting a trip that went wrong
---
--- See 007_messages_and_reports.sql for the reasoning. Threads belong to an
--- accepted request, so they exist only between two people actually
--- travelling together; reports outlive the trip they refer to, because a
--- report about a deleted ride is exactly the one worth keeping.
- create if not exists trip_messages (
-  id         uuid primary key default gen_random_uuid(),
+CREATE INDEX IF NOT EXISTS trip_requests_ride_created
+  ON public.trip_requests (ride_id, created_at);
 
-  -- The thread. One per accepted request, cascading: if the trip itself is
-  -- removed there is nobody left who is allowed to read this.
-  request_id uuid not null references trip_requests (id) on delete cascade,
-  sender_id  uuid not null references profiles (id) on delete cascade,
 
-  body       text not null,
-  created_at timestamptz not null default now(),
+-- ============================================================
+-- 003 VEHICLE NUMBER
+-- ============================================================
 
-  -- Set when the *other* person has loaded the thread. Drives the unread
-  -- count, nothing more.
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS vehicle_number text;
+
+
+-- ============================================================
+-- 004 PHONE
+-- ============================================================
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS phone text;
+
+
+-- ============================================================
+-- 005 LIVE TRACKING
+-- ============================================================
+
+ALTER TABLE public.rides
+  ADD COLUMN IF NOT EXISTS live_lat      double precision,
+  ADD COLUMN IF NOT EXISTS live_lng      double precision,
+  ADD COLUMN IF NOT EXISTS live_heading  double precision,
+  ADD COLUMN IF NOT EXISTS live_at       timestamptz,
+  ADD COLUMN IF NOT EXISTS trip_status   text DEFAULT 'scheduled';
+
+UPDATE public.rides
+SET trip_status = 'scheduled'
+WHERE trip_status IS NULL;
+
+CREATE INDEX IF NOT EXISTS rides_driver_trip_status
+  ON public.rides (driver_id, trip_status);
+
+
+-- ============================================================
+-- 006 PROFILE EMAIL
+-- ============================================================
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email text;
+
+CREATE INDEX IF NOT EXISTS profiles_email_idx
+  ON public.profiles (email);
+
+
+-- ============================================================
+-- 007 CHAT + SAFETY REPORTS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.trip_messages (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL REFERENCES public.trip_requests(id) ON DELETE CASCADE,
+  sender_id  uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  body       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
   read_at    timestamptz
 );
 
--- Every read is "this thread, in order", which is exactly this index.
-create index if not exists trip_messages_thread
-  on trip_messages (request_id, created_at);
+CREATE INDEX IF NOT EXISTS trip_messages_thread
+  ON public.trip_messages (request_id, created_at);
 
--- Counting what the other person has not read yet.
-create index if not exists trip_messages_unread
-  on trip_messages (request_id, sender_id) where read_at is null;
+CREATE INDEX IF NOT EXISTS trip_messages_unread
+  ON public.trip_messages (request_id, sender_id)
+  WHERE read_at IS NULL;
 
-create table if not exists safety_reports (
-  id          uuid primary key default gen_random_uuid(),
-
-  -- Null rather than cascade: the trip may be gone, the report stands.
-  request_id  uuid references trip_requests (id) on delete set null,
-  ride_id     uuid references rides (id) on delete set null,
-
-  reporter_id uuid not null references profiles (id) on delete cascade,
-
-  -- Who it is about. Null is allowed for a report about the trip itself
-  -- rather than about a person.
-  subject_id  uuid references profiles (id) on delete set null,
-
-  -- Kept as text with a check rather than an enum: adding a category to an
-  -- enum needs a migration, and this list will grow.
-  category    text not null check (category in (
-    'unsafe_driving',
-    'no_show',
-    'wrong_vehicle',
-    'harassment',
-    'payment',
-    'other'
-  )),
-
+CREATE TABLE IF NOT EXISTS public.safety_reports (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id  uuid REFERENCES public.trip_requests(id) ON DELETE SET NULL,
+  ride_id     uuid REFERENCES public.rides(id) ON DELETE SET NULL,
+  reporter_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  subject_id  uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  category    text NOT NULL CHECK (
+    category IN (
+      'unsafe_driving',
+      'no_show',
+      'wrong_vehicle',
+      'harassment',
+      'payment',
+      'other'
+    )
+  ),
   details     text,
-
-  -- open -> reviewing -> resolved | dismissed. Moved by whoever handles
-  -- these; the app only ever writes 'open'.
-  status      text not null default 'open',
-
-  created_at  timestamptz not null default now()
+  status      text NOT NULL DEFAULT 'open',
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- "What has been reported about this person" — the question that matters
--- when deciding whether an account should keep driving.
-create index if not exists safety_reports_subject
-  on safety_reports (subject_id, created_at desc);
+CREATE INDEX IF NOT EXISTS safety_reports_subject
+  ON public.safety_reports (subject_id, created_at DESC);
 
--- "What have I reported", for showing someone their own history.
-create index if not exists safety_reports_reporter
-  on safety_reports (reporter_id, created_at desc);
+CREATE INDEX IF NOT EXISTS safety_reports_reporter
+  ON public.safety_reports (reporter_id, created_at DESC);
 
--- One report per person, per trip, per category. A second click, or a
--- second tab, is not a second incident.
-create unique index if not exists safety_reports_one_per_trip
-  on safety_reports (reporter_id, request_id, category)
-  where request_id is not null;
-
--- Note on row-level security: like the other tables here, these are
--- reached only through the API, which resolves the caller from a signed
--- token and decides who may read what. Nothing in the browser holds a key
--- that can touch them directly.
---
--- What has been reported, most recent first:
---
---   select r.created_at, r.category, r.status,
---          reporter.name as by, subject.name as about, r.details
---   from safety_reports r
---   left join profiles reporter on reporter.id = r.reporter_id
---   left join profiles subject  on subject.id  = r.subject_id
---   order by r.created_at desc;
+CREATE UNIQUE INDEX IF NOT EXISTS safety_reports_one_per_trip
+  ON public.safety_reports (reporter_id, request_id, category)
+  WHERE request_id IS NOT NULL;
 
 
 -- ============================================================
--- 008 — a ride stops existing when it leaves
+-- 008 RIDE EXPIRY
 -- ============================================================
---
--- A departure was only ever stored as the two halves a human types: a
--- date and a time, in the driver's own wall clock. Nothing could compare
--- that against now(), so the board was every row in the table and a ride
--- posted for last Tuesday stayed on it forever.
---
--- This stores the departure as a real instant, keeps it in step with a
--- trigger, indexes it, and adds the sweeper that clears out rides nothing
--- ever happened on.
 
-create or replace function campushop_timezone()
-  returns text
-  language sql
-  immutable
-  parallel safe
-as $$
-  select 'Asia/Kolkata'::text;
+CREATE OR REPLACE FUNCTION public.campushop_timezone()
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+  SELECT 'Asia/Kolkata'::text;
 $$;
 
-
--- ============================================================
--- date + time -> the instant it leaves
--- ============================================================
---
--- Takes text so it does not care whether `time` is stored as `time` or as
--- `text`, and whether it reads 08:00 or 08:00:00 — both are true of rides
--- already in this table.
---
--- A row whose date will not parse returns null, and null is treated
--- everywhere below as "we do not know when this leaves". Such a ride is
--- kept and shown rather than hidden or deleted: losing a real ride to a
--- parsing quirk is far worse than leaving one odd row on the board.
---
--- A missing time is read as 23:59 — the ride is assumed to be good until
--- the end of its day, so a half-filled row is never binned early.
-
-create or replace function campushop_departs_at(d text, t text)
-  returns timestamptz
-  language plpgsql
-  stable
-  parallel safe
-as $$
-declare
+CREATE OR REPLACE FUNCTION public.campushop_departs_at(d text, t text)
+RETURNS timestamptz
+LANGUAGE plpgsql
+STABLE
+PARALLEL SAFE
+AS $$
+DECLARE
   wall timestamp;
-begin
-  if d is null or btrim(d) = '' then
-    return null;
-  end if;
+BEGIN
+  IF d IS NULL OR btrim(d) = '' THEN
+    RETURN NULL;
+  END IF;
 
-  begin
-    wall := (btrim(d) || ' ' || coalesce(nullif(btrim(t), ''), '23:59'))::timestamp;
-  exception
-    when others then
-      return null;
-  end;
+  BEGIN
+    wall := (
+      btrim(d) || ' ' || coalesce(nullif(btrim(t), ''), '23:59')
+    )::timestamp;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN NULL;
+  END;
 
-  -- Reads the wall clock as standing in the campus's zone, which is what
-  -- makes it comparable with now().
-  return wall at time zone campushop_timezone();
-end;
+  RETURN wall AT TIME ZONE public.campushop_timezone();
+END;
 $$;
 
+ALTER TABLE public.rides
+  ADD COLUMN IF NOT EXISTS departs_at timestamptz;
 
--- ============================================================
--- The column, and the trigger that keeps it honest
--- ============================================================
-
-alter table rides
-  add column if not exists departs_at timestamptz;
-
--- Derived, never supplied. The API server does not write this column and
--- the browser has never been able to: whatever date and time end up on the
--- row, the instant matches them. That is the point of doing it in the
--- database rather than in whichever code path happened to do the insert.
-
-create or replace function campushop_rides_set_departs_at()
-  returns trigger
-  language plpgsql
-as $$
-begin
-  new.departs_at := campushop_departs_at(new.date::text, new.time::text);
-  return new;
-end;
+CREATE OR REPLACE FUNCTION public.campushop_rides_set_departs_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.departs_at := public.campushop_departs_at(NEW.date::text, NEW.time::text);
+  RETURN NEW;
+END;
 $$;
 
-drop trigger if exists rides_set_departs_at on rides;
+DROP TRIGGER IF EXISTS rides_set_departs_at ON public.rides;
 
-create trigger rides_set_departs_at
-  before insert or update of date, time
-  on rides
-  for each row
-  execute function campushop_rides_set_departs_at();
+CREATE TRIGGER rides_set_departs_at
+BEFORE INSERT OR UPDATE OF date, time
+ON public.rides
+FOR EACH ROW
+EXECUTE FUNCTION public.campushop_rides_set_departs_at();
 
--- Every ride already posted.
-update rides
-   set departs_at = campushop_departs_at(date::text, time::text)
- where departs_at is distinct from campushop_departs_at(date::text, time::text);
+UPDATE public.rides
+SET departs_at = public.campushop_departs_at(date::text, time::text)
+WHERE departs_at IS DISTINCT FROM public.campushop_departs_at(date::text, time::text);
 
--- The board's one question — "what has not left yet" — asked on every
--- search and every poll.
-create index if not exists rides_departs_at
-  on rides (departs_at);
+CREATE INDEX IF NOT EXISTS rides_departs_at
+  ON public.rides (departs_at);
 
+CREATE OR REPLACE VIEW public.active_rides AS
+SELECT *
+FROM public.rides
+WHERE departs_at IS NULL OR departs_at >= now();
 
--- ============================================================
--- What "still joinable" means
--- ============================================================
---
--- One definition, in the database, so the API and the browser are agreeing
--- with something rather than each inventing their own answer.
---
--- Note what is *not* here: a ride does not stay joinable because its driver
--- is currently driving it. A trip already under way is no longer a seat
--- anybody can ask for, so it leaves the board at its departure time like
--- any other — it simply is not deleted while it runs. Being off the board
--- and being gone are two different things, and the sweeper below is the
--- one that decides the second.
-
-create or replace view active_rides as
-  select *
-    from rides
-   where departs_at is null
-      or departs_at >= now();
-
-comment on view active_rides is
-  'Rides that have not departed yet - the ride board. Rides with an '
-  'unparseable date are kept deliberately rather than hidden.';
-
-
--- ============================================================
--- The sweeper
--- ============================================================
---
--- Deleting a ride is not the same as taking it off the board, and this is
--- deliberately far more cautious than the view above.
---
--- A ride is only removed when both are true:
---
---   * it left more than the grace period ago, and
---   * nobody ever asked for a seat on it.
---
--- Which is to say: only the rides nothing ever happened on — posted,
--- ignored, and now over. That is the overwhelming majority of what piles
--- up, and none of it is anybody's history.
---
--- How far along the trip got is deliberately not part of this. It was, at
--- first, on the reasoning that a trip in progress must never be deleted —
--- but the grace period is what actually protects that, and hours after
--- departure a ride nobody ever requested has no passenger left to protect.
--- All the condition really did was keep every ride whose driver once
--- pressed "start", which on a test database is most of them.
---
--- The moment a request exists, the ride stops being deletable, whatever
--- became of that request. An accepted one is a trip somebody took: MyTrips
--- lists it, a safety report can point at it, and the driver's reliability
--- count is built from it. A declined one is still the rider's record of
--- having asked. Even an unanswered one is what the driver's queue shows as
--- missed. All three read the ride row for where the trip was going, so
--- deleting it would not tidy the table — it would blank out screens that
--- are still in use. Unanswered requests are swept separately a week later
--- (see purgeExpiredRequests in the API), and the ride becomes deletable
--- once they are gone.
---
--- The grace period covers the ride that is running late or running long.
--- A driver who set off at 08:00 and has not touched the app is still on
--- the road at 08:05, and a trip deleted out from under them mid-journey
--- would take the live map with it.
---
--- security definer so the sweep works whichever key the API server is
--- holding — the anon key is subject to row-level security, and a cleanup
--- job that silently deletes nothing is the worst of both worlds.
-
-create or replace function delete_expired_rides(grace_minutes integer default 180)
-  returns integer
-  language plpgsql
-  security definer
-  set search_path = public
-as $$
-declare
+CREATE OR REPLACE FUNCTION public.delete_expired_rides(grace_minutes integer DEFAULT 180)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
   removed integer;
-begin
-  delete from rides r
-   where r.departs_at is not null
-     and r.departs_at < now() - make_interval(mins => greatest(grace_minutes, 0))
-     and not exists (
-           select 1
-             from trip_requests tr
-            where tr.ride_id = r.id
-         );
-
-  get diagnostics removed = row_count;
-
-  return removed;
-end;
-$$;
-
-comment on function delete_expired_rides(integer) is
-  'Removes departed rides that nobody ever requested and that never '
-  'started. Rides with any request are history and are kept. Safe to run '
-  'repeatedly; returns how many were removed.';
-
--- The API server calls this on boot and on a timer, so the cleanup happens
--- whether or not the database has a scheduler. If pg_cron is enabled the
--- job below runs it in the database too, which keeps the table tidy even
--- when no server is up.
-grant execute on function delete_expired_rides(integer) to anon, authenticated, service_role;
-
-do $$
-begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
-    perform cron.unschedule('campushop-expired-rides')
-      where exists (select 1 from cron.job where jobname = 'campushop-expired-rides');
-
-    perform cron.schedule(
-      'campushop-expired-rides',
-      '*/15 * * * *',
-      'select delete_expired_rides();'
+BEGIN
+  DELETE FROM public.rides r
+  WHERE r.departs_at IS NOT NULL
+    AND r.departs_at < now() - make_interval(mins => greatest(grace_minutes, 0))
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.trip_requests tr
+      WHERE tr.ride_id = r.id
     );
 
-    raise notice 'pg_cron: expired rides will be swept every 15 minutes.';
-  else
-    raise notice 'pg_cron is not enabled - the API server sweeps instead. That is fine.';
-  end if;
-exception
-  when others then
-    raise notice 'pg_cron scheduling skipped (%). The API server sweeps instead.', sqlerrm;
-end;
+  GET DIAGNOSTICS removed = ROW_COUNT;
+  RETURN removed;
+END;
 $$;
 
+GRANT EXECUTE ON FUNCTION public.delete_expired_rides(integer)
+TO anon, authenticated, service_role;
+
 
 -- ============================================================
--- 009 — administration
+-- 009 ADMIN
 -- ============================================================
---
--- The privilege, deliberately separate from the `role` column: that one is
--- picked by the user on the signup form and means student or faculty. A
--- privilege that can be named in a request body is not a privilege.
---
--- `is_admin` has no write path in the API at all. It is set by hand, below.
 
-alter table profiles
-  add column if not exists is_admin boolean not null default false;
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS suspended_at timestamptz,
+  ADD COLUMN IF NOT EXISTS suspended_reason text;
 
-create index if not exists profiles_admin_idx
-  on profiles (id) where is_admin;
+CREATE INDEX IF NOT EXISTS profiles_admin_idx
+  ON public.profiles (id)
+  WHERE is_admin;
 
--- An account that may no longer sign in. A timestamp rather than a boolean
--- so the record says *when*, which is the first thing anyone asks when a
--- suspension is appealed.
-
-alter table profiles
-  add column if not exists suspended_at timestamptz;
-
-alter table profiles
-  add column if not exists suspended_reason text;
-
--- What the admins did. Powers with no record of their use are the part
--- that becomes impossible to reason about later.
-
-create table if not exists admin_actions (
-  id         uuid primary key default gen_random_uuid(),
-  admin_id   uuid not null references profiles (id) on delete restrict,
-  action     text not null,
+CREATE TABLE IF NOT EXISTS public.admin_actions (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  action     text NOT NULL,
   target_id  uuid,
   note       text,
-  created_at timestamptz not null default now()
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create index if not exists admin_actions_recent
-  on admin_actions (created_at desc);
+CREATE INDEX IF NOT EXISTS admin_actions_recent
+  ON public.admin_actions (created_at DESC);
 
-create index if not exists admin_actions_target
-  on admin_actions (target_id, created_at desc);
-
--- Making the first administrator. There is no endpoint for this on
--- purpose: an API that can grant administrator is an API that can be made
--- to grant administrator. Put in your own address and run it.
---
---   update profiles set is_admin = true where email = 'you@college.edu';
+CREATE INDEX IF NOT EXISTS admin_actions_target
+  ON public.admin_actions (target_id, created_at DESC);
 
 
 -- ============================================================
--- 010 — rating the person you travelled with
+-- 010 RATINGS
 -- ============================================================
---
--- Like safety_reports in 007, a rating outlives the trip it is about: the
--- trip row goes a week after it finishes and the ride is swept once it has
--- departed, but "four stars from eleven people" has to survive both.
 
-create table if not exists trip_ratings (
-  id         uuid primary key default gen_random_uuid(),
-  request_id uuid references trip_requests (id) on delete set null,
-  ride_id    uuid references rides (id) on delete set null,
-  rater_id   uuid not null references profiles (id) on delete cascade,
-  subject_id uuid not null references profiles (id) on delete cascade,
-  stars      smallint not null check (stars between 1 and 5),
+CREATE TABLE IF NOT EXISTS public.trip_ratings (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid REFERENCES public.trip_requests(id) ON DELETE SET NULL,
+  ride_id    uuid REFERENCES public.rides(id) ON DELETE SET NULL,
+  rater_id   uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  subject_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  stars      smallint NOT NULL CHECK (stars BETWEEN 1 AND 5),
   comment    text,
-  created_at timestamptz not null default now(),
-  constraint trip_ratings_not_self check (rater_id <> subject_id)
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT trip_ratings_not_self CHECK (rater_id <> subject_id)
 );
 
-create index if not exists trip_ratings_subject
-  on trip_ratings (subject_id);
+CREATE INDEX IF NOT EXISTS trip_ratings_subject
+  ON public.trip_ratings (subject_id);
 
-create index if not exists trip_ratings_rater
-  on trip_ratings (rater_id, created_at desc);
+CREATE INDEX IF NOT EXISTS trip_ratings_rater
+  ON public.trip_ratings (rater_id, created_at DESC);
 
--- One rating per person, per trip, which is what lets the API upsert
--- rather than insert. Not partial: Postgres cannot infer a partial index
--- in ON CONFLICT unless the predicate is restated, and a plain unique
--- index already treats nulls as distinct, so rows whose request_id has
--- gone null never collide anyway.
-create unique index if not exists trip_ratings_one_per_trip
-  on trip_ratings (rater_id, request_id);
+-- Collapse accidental duplicates before adding the unique index.
+DELETE FROM public.trip_ratings a
+USING public.trip_ratings b
+WHERE a.rater_id = b.rater_id
+  AND a.request_id = b.request_id
+  AND a.request_id IS NOT NULL
+  AND a.id <> b.id
+  AND a.created_at > b.created_at;
 
--- The average and the count, per person. A view rather than columns kept
--- in step by a trigger: the board reads it for every driver at once, and
--- an average that can drift from the ratings under it is not worth the
--- speed yet.
-create or replace view profile_ratings as
-  select subject_id,
-         round(avg(stars)::numeric, 2) as rating_avg,
-         count(*)::int                 as rating_count
-    from trip_ratings
-   group by subject_id;
+CREATE UNIQUE INDEX IF NOT EXISTS trip_ratings_one_per_trip
+  ON public.trip_ratings (rater_id, request_id);
 
-grant select on profile_ratings to anon, authenticated, service_role;
+CREATE OR REPLACE VIEW public.profile_ratings AS
+SELECT
+  subject_id,
+  round(avg(stars)::numeric, 2) AS rating_avg,
+  count(*)::int AS rating_count
+FROM public.trip_ratings
+GROUP BY subject_id;
 
-
--- ============================================================
--- 011 — the decision, on the report it was about
--- ============================================================
---
--- 009 wrote every status move to admin_actions, which is the right place
--- for "who did what" and the wrong one for "what was decided about this
--- report". The decision lives on the report now; the audit row is still
--- written, because that is the history.
-
-alter table safety_reports
-  add column if not exists resolution text;
-
-alter table safety_reports
-  add column if not exists resolved_at timestamptz;
-
-alter table safety_reports
-  add column if not exists resolved_by uuid references profiles (id) on delete set null;
-
--- The queue is read as "the open ones, oldest first" on every visit, and
--- had no index behind it: 007 indexed the other two questions.
-create index if not exists safety_reports_queue
-  on safety_reports (status, created_at);
-
--- Administration lists rides by driver, newest first, which is not the
--- order the board reads them in.
-create index if not exists rides_driver_recent
-  on rides (driver_id, created_at desc);
+GRANT SELECT ON public.profile_ratings
+TO anon, authenticated, service_role;
 
 
 -- ============================================================
--- 012 — appointing an administrator by invitation
+-- 011 ADMIN DETAIL / REPORT RESOLUTION
 -- ============================================================
---
--- An administrator can be anybody with a mailbox: an office account, a
--- warden, staff on another domain. The .edu.in rule belongs on the signup
--- form, where it keeps strangers off the ride board — not here. What
--- stands in its place is a code sent to the address, which turns "somebody
--- typed this" into "whoever reads that mailbox agreed".
---
--- The code itself is never stored; only a salted hash of it.
 
-create table if not exists admin_invites (
-  id          uuid primary key default gen_random_uuid(),
-  email       text not null,
-  invited_by  uuid not null references profiles (id) on delete restrict,
+ALTER TABLE public.safety_reports
+  ADD COLUMN IF NOT EXISTS resolution text,
+  ADD COLUMN IF NOT EXISTS resolved_at timestamptz,
+  ADD COLUMN IF NOT EXISTS resolved_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS safety_reports_queue
+  ON public.safety_reports (status, created_at);
+
+CREATE INDEX IF NOT EXISTS rides_driver_recent
+  ON public.rides (driver_id, created_at DESC);
+
+
+-- ============================================================
+-- 012 ADMIN INVITES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.admin_invites (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       text NOT NULL,
+  invited_by  uuid NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   reason      text,
-  code_hash   text not null,
-  expires_at  timestamptz not null,
-  attempts    smallint not null default 0,
+  code_hash   text NOT NULL,
+  expires_at  timestamptz NOT NULL,
+  attempts    smallint NOT NULL DEFAULT 0,
   accepted_at timestamptz,
-  accepted_by uuid references profiles (id) on delete set null,
-  created_at  timestamptz not null default now()
+  accepted_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-create index if not exists admin_invites_email
-  on admin_invites (email, created_at desc);
+CREATE INDEX IF NOT EXISTS admin_invites_email
+  ON public.admin_invites (email, created_at DESC);
 
-create index if not exists admin_invites_open
-  on admin_invites (created_at desc) where accepted_at is null;
+CREATE INDEX IF NOT EXISTS admin_invites_open
+  ON public.admin_invites (created_at DESC)
+  WHERE accepted_at IS NULL;
 
 
 -- ============================================================
--- Check it worked
+-- 013 CAMPUS SOCIAL
+-- ============================================================
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS course text;
+
+ALTER TABLE public.rides
+  ADD COLUMN IF NOT EXISTS vibe text;
+
+ALTER TABLE public.rides
+  DROP CONSTRAINT IF EXISTS rides_vibe_check;
+
+ALTER TABLE public.rides
+  ADD CONSTRAINT rides_vibe_check
+  CHECK (vibe IS NULL OR vibe IN ('music', 'chatty', 'quiet', 'study', 'chai'));
+
+CREATE TABLE IF NOT EXISTS public.campus_wall_posts (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_id  uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  body       text NOT NULL CHECK (char_length(trim(body)) BETWEEN 1 AND 280),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS campus_wall_recent
+  ON public.campus_wall_posts (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS profiles_course_idx
+  ON public.profiles (course);
+
+CREATE INDEX IF NOT EXISTS rides_vibe_idx
+  ON public.rides (vibe);
+
+
+-- ============================================================
+-- 014 PROFILE REPAIR / AUTO-CREATE
 -- ============================================================
 --
--- Should list: vehicle_number, phone, email, the admin columns, and the
--- ride columns.
+-- This fixes the exact PGRST116 problem where a Supabase Auth account exists
+-- but public.profiles has no corresponding row.
 
-select table_name, column_name
-from information_schema.columns
-where (table_name = 'profiles' and column_name in (
-        'vehicle_number', 'phone', 'email',
-        'is_admin', 'suspended_at', 'suspended_reason'
-     ))
-   or (table_name = 'rides' and column_name in (
-        'pickup_lat', 'pickup_lng', 'dropoff_lat', 'dropoff_lng',
-        'route_geometry', 'distance_meters', 'duration_seconds',
-        'live_lat', 'live_lng', 'live_heading', 'live_at', 'trip_status',
-        'departs_at'))
-order by table_name, column_name;
+INSERT INTO public.profiles (id, name, role, email)
+SELECT
+  u.id,
+  COALESCE(NULLIF(u.raw_user_meta_data ->> 'name', ''), split_part(u.email, '@', 1), 'Rider'),
+  CASE
+    WHEN lower(COALESCE(u.raw_user_meta_data ->> 'role', 'student')) = 'faculty'
+      THEN 'faculty'
+    ELSE 'student'
+  END,
+  u.email
+FROM auth.users u
+LEFT JOIN public.profiles p ON p.id = u.id
+WHERE p.id IS NULL;
 
--- And the two tables added in 007.
 
-select table_name
-from information_schema.tables
-where table_schema = 'public'
-  and table_name in (
-        'trip_messages', 'safety_reports', 'admin_actions', 'trip_ratings',
-        'admin_invites'
-     )
-order by table_name;
+CREATE OR REPLACE FUNCTION public.campushop_create_profile_for_auth_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, name, role, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NULLIF(NEW.raw_user_meta_data ->> 'name', ''), split_part(NEW.email, '@', 1), 'Rider'),
+    CASE
+      WHEN lower(COALESCE(NEW.raw_user_meta_data ->> 'role', 'student')) = 'faculty'
+        THEN 'faculty'
+      ELSE 'student'
+    END,
+    NEW.email
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET email = COALESCE(EXCLUDED.email, public.profiles.email);
 
--- Nothing on the board should have a departure in the past.
+  RETURN NEW;
+END;
+$$;
 
-select count(*) filter (where departs_at >= now()) as on_the_board,
-       count(*) filter (where departs_at <  now()) as departed,
-       count(*) filter (where departs_at is null)  as undated
-from rides;
+DROP TRIGGER IF EXISTS campushop_create_profile ON auth.users;
+
+CREATE TRIGGER campushop_create_profile
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.campushop_create_profile_for_auth_user();
+
+
+-- ============================================================
+-- FINAL SCHEMA CACHE RELOAD
+-- ============================================================
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ============================================================
+-- VERIFICATION
+-- ============================================================
+
+SELECT
+  'profiles' AS object_name,
+  to_regclass('public.profiles') IS NOT NULL AS exists
+UNION ALL
+SELECT 'rides', to_regclass('public.rides') IS NOT NULL
+UNION ALL
+SELECT 'trip_requests', to_regclass('public.trip_requests') IS NOT NULL
+UNION ALL
+SELECT 'trip_messages', to_regclass('public.trip_messages') IS NOT NULL
+UNION ALL
+SELECT 'safety_reports', to_regclass('public.safety_reports') IS NOT NULL
+UNION ALL
+SELECT 'trip_ratings', to_regclass('public.trip_ratings') IS NOT NULL
+UNION ALL
+SELECT 'profile_ratings', to_regclass('public.profile_ratings') IS NOT NULL
+UNION ALL
+SELECT 'campus_wall_posts', to_regclass('public.campus_wall_posts') IS NOT NULL
+UNION ALL
+SELECT 'admin_actions', to_regclass('public.admin_actions') IS NOT NULL
+UNION ALL
+SELECT 'admin_invites', to_regclass('public.admin_invites') IS NOT NULL;

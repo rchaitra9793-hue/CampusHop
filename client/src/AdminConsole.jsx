@@ -34,6 +34,9 @@ const ACTION_LABELS = {
   "user.grant_admin": "Made administrator",
   "user.revoke_admin": "Administrator removed",
   "ride.delete": "Ride removed",
+  "user.warn": "Member warned",
+  "wall.delete": "Wall notes removed",
+  "trip.cancel": "Trip cancelled",
 };
 
 const TRIP_LABELS = {
@@ -160,21 +163,95 @@ function Overview({ stats, onPickStatus }) {
  * server requires one too, and asking here means the refusal is not the
  * first time anybody mentions it.
  */
+/**
+ * Every action resolving a report can take, as dropdown groups. Each
+ * option maps to the list of server actions it applies, so the common
+ * combinations are one choice. Options are only offered where they can
+ * work — no ride actions for a deleted trip, no reinstate for somebody
+ * who is not suspended.
+ */
+function reportActions(report) {
+  const subject = report.subject;
+  const groups = [];
+
+  if (subject) {
+    const items = [{ value: "warn_user", label: "Warn them", actions: ["warn_user"] }];
+
+    if (subject.suspended) {
+      items.push({ value: "reinstate_user", label: "Lift their suspension", actions: ["reinstate_user"] });
+    } else {
+      items.push({ value: "suspend_user", label: "Suspend their account", actions: ["suspend_user"] });
+    }
+
+    items.push(
+      { value: "remove_user_rides", label: "Remove all their upcoming rides", actions: ["remove_user_rides"] },
+      { value: "remove_user_posts", label: "Delete their campus wall notes", actions: ["remove_user_posts"] },
+      { value: "warn_user+remove_user_rides", label: "Warn them + remove their upcoming rides", actions: ["warn_user", "remove_user_rides"] }
+    );
+
+    if (!subject.suspended) {
+      items.push({
+        value: "suspend_user+remove_user_rides+remove_user_posts",
+        label: "Suspend + remove their rides and wall notes",
+        actions: ["suspend_user", "remove_user_rides", "remove_user_posts"],
+      });
+    }
+
+    groups.push({ title: `Reported user · ${subject.name}`, items });
+  }
+
+  const trip = [];
+  if (report.tripCancellable) {
+    trip.push({ value: "cancel_trip", label: "Cancel this trip (both are told)", actions: ["cancel_trip"] });
+  }
+  if (report.ride) {
+    trip.push({ value: "remove_ride", label: "Remove this ride from the board", actions: ["remove_ride"] });
+    if (subject && !subject.suspended) {
+      trip.push({ value: "warn_user+remove_ride", label: "Warn user + remove this ride", actions: ["warn_user", "remove_ride"] });
+      trip.push({ value: "suspend_user+remove_ride", label: "Suspend user + remove this ride", actions: ["suspend_user", "remove_ride"] });
+    }
+  }
+  if (trip.length) groups.push({ title: "This trip", items: trip });
+
+  if (report.reporter?.id) {
+    groups.push({
+      title: `Person who filed it · ${report.reporter.name || "Unknown"} (false or abusive report)`,
+      items: [
+        { value: "warn_reporter", label: "Warn them", actions: ["warn_reporter"] },
+        { value: "suspend_reporter", label: "Suspend their account", actions: ["suspend_reporter"] },
+      ],
+    });
+  }
+
+  return groups;
+}
+
 function ReportRow({ report, onMoved, onOpenUser }) {
   const [note, setNote] = useState("");
+  const [choice, setChoice] = useState("none");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
 
+  const groups = reportActions(report);
+  const actions =
+    groups.flatMap((g) => g.items).find((item) => item.value === choice)?.actions || [];
+
   const move = async (status) => {
     if (busy) return;
+
+    if (status !== "resolved" && actions.length) {
+      setError("Actions are applied when you resolve the case. Click Resolve, or choose No further action.");
+      return;
+    }
 
     setBusy(status);
     setError("");
 
     try {
-      await api.adminConsole.setReportStatus(report.id, status, note.trim());
+      await api.adminConsole.setReportStatus(report.id, status, note.trim(), actions);
       setNote("");
+      setChoice("none");
       setOpen(false);
       await onMoved();
     } catch (err) {
@@ -243,6 +320,12 @@ function ReportRow({ report, onMoved, onOpenUser }) {
 
       {report.details && <blockquote>{report.details}</blockquote>}
 
+      {!decided && (
+        <p className="admin-case-hint">
+          <strong>Admin job:</strong> investigate the issue, take the appropriate action if needed, then resolve the case. The person who filed this report will see the decision in their account and receive an email when email notifications are configured.
+        </p>
+      )}
+
       {/* What was decided, on the report itself rather than left in the
           audit log. This is the thing somebody asks about months later. */}
       {report.resolution && (
@@ -260,13 +343,34 @@ function ReportRow({ report, onMoved, onOpenUser }) {
 
       {open ? (
         <div className="admin-actions">
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="What was done about this? Required to resolve or dismiss."
-            rows={2}
-            maxLength={1000}
-          />
+          <div className="admin-resolution-grid">
+            <label>
+              <span className="admin-label">WHAT SHOULD HAPPEN?</span>
+              <select value={choice} onChange={(e) => setChoice(e.target.value)}>
+                <option value="none">No further action</option>
+                {groups.map((group) => (
+                  <optgroup key={group.title} label={group.title}>
+                    {group.items.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="admin-label">DECISION NOTE</span>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Tell the reporter what you found and what you did. Required to resolve or dismiss."
+                rows={3}
+                maxLength={1000}
+              />
+            </label>
+          </div>
 
           <div className="admin-action-row">
             {report.status !== "reviewing" && (
@@ -276,7 +380,7 @@ function ReportRow({ report, onMoved, onOpenUser }) {
                 disabled={Boolean(busy)}
                 onClick={() => move("reviewing")}
               >
-                {busy === "reviewing" ? "Saving…" : "Mark reviewing"}
+                {busy === "reviewing" ? "Saving…" : "Start review"}
               </button>
             )}
 
@@ -315,6 +419,7 @@ function ReportRow({ report, onMoved, onOpenUser }) {
               onClick={() => {
                 setOpen(false);
                 setError("");
+                setChoice("none");
               }}
             >
               Cancel

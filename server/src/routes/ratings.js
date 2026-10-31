@@ -69,34 +69,71 @@ router.post("/", async (req, res, next) => {
       });
     }
 
-    // Changing your mind is an edit of the one rating, not a second one.
-    // The unique index in 010 says the same thing from the database's end.
-    const { data, error } = await db
+    // Do an explicit read/update-or-insert instead of relying on
+    // PostgREST's ON CONFLICT inference. This works even when a database has
+    // an older schema cache or when the unique index was created after the
+    // server first started.
+    const payload = {
+      request_id: access.request.id,
+      ride_id: access.ride.id,
+      rater_id: req.user.id,
+      subject_id: access.otherId,
+      stars: score,
+      comment: text || null,
+    };
+
+    const { data: existing, error: lookupError } = await db
       .from("trip_ratings")
-      .upsert(
-        {
-          request_id: access.request.id,
-          ride_id: access.ride.id,
-          rater_id: req.user.id,
-          subject_id: access.otherId,
-          stars: score,
-          comment: text || null,
-        },
-        {
-          // No space after the comma: this goes into the on_conflict
-          // query parameter verbatim, and PostgREST splits it on the
-          // comma — a space would ask it for a column called " request_id".
-          onConflict: "rater_id,request_id",
-        }
-      )
-      .select("id, stars, comment, created_at")
-      .single();
+      .select("id")
+      .eq("request_id", access.request.id)
+      .eq("rater_id", req.user.id)
+      .maybeSingle();
+
+    if (lookupError) {
+      const missing =
+        lookupError.code === "42P01" ||
+        lookupError.code === "PGRST205" ||
+        lookupError.code === "42703" ||
+        /trip_ratings|profile_ratings/i.test(lookupError.message || "");
+
+      if (missing) {
+        return res.status(503).json({
+          error:
+            "Ratings are not enabled in the database yet. Run db/FULL_CAMPUSHOP_SETUP.sql in Supabase, then refresh the page.",
+        });
+      }
+
+      throw lookupError;
+    }
+
+    let data;
+    let error;
+
+    if (existing?.id) {
+      ({ data, error } = await db
+        .from("trip_ratings")
+        .update(payload)
+        .eq("id", existing.id)
+        .select("id, stars, comment, created_at")
+        .single());
+    } else {
+      ({ data, error } = await db
+        .from("trip_ratings")
+        .insert(payload)
+        .select("id, stars, comment, created_at")
+        .single());
+    }
 
     if (error) {
-      // The view and the table both live in 010.
-      if (error.code === "42P01") {
+      if (
+        error.code === "42P01" ||
+        error.code === "PGRST205" ||
+        error.code === "42703" ||
+        /trip_ratings/i.test(error.message || "")
+      ) {
         return res.status(503).json({
-          error: "Ratings are not set up on this database yet.",
+          error:
+            "Ratings are not enabled in the database yet. Run db/FULL_CAMPUSHOP_SETUP.sql in Supabase, then refresh the page.",
         });
       }
 

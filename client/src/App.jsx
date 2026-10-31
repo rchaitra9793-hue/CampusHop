@@ -4,11 +4,10 @@ import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 import ForgotPassword from "./ForgotPassword";
 import ResetPassword from "./ResetPassword";
+import VerifyEmail from "./VerifyEmail";
 import campushopLogo from "./assets/campushop-logo.png";
 import { supabase } from "./supabaseClient";
 import { api } from "./lib/api";
-import RideCard from "./RideCard";
-import AddressInput from "./AddressInput";
 
 import FindRide from "./FindRide";
 import OfferRide from "./OfferRide";
@@ -21,7 +20,11 @@ import VehiclePrompt from "./VehiclePrompt";
 import LiveRide from "./LiveRide";
 import NearbyRides from "./NearbyRides";
 import RequestWaiting from "./RequestWaiting";
-import ProfilePage from "./ProfilePage";
+import SettingsPage from "./SettingsPage";
+import RideOutcome from "./RideOutcome";
+import CommunityPage from "./CommunityPage";
+import HomePage from "./HomePage";
+import { bigNumber } from "./CampusStats";
 // Two administration screens. AdminDashboard is the operations view
 // that arrived as its own project, unchanged; AdminConsole is the one
 // built here. Each has its own gate, and an account can hold either,
@@ -31,6 +34,12 @@ import AdminConsole from "./AdminConsole";
 import { useIncomingRequests } from "./lib/useIncomingRequests";
 import { upcoming } from "./lib/rideState";
 import { needsDetails } from "./lib/vehicles";
+import {
+  cancelKey,
+  completeKey,
+  markNoticeSeen,
+  noticeSeen,
+} from "./lib/rideNotices";
 
 // Cycled so a board of rides keeps the pinned-note look.
 const ACCENTS = ["coral", "sage", "lavender"];
@@ -44,7 +53,7 @@ const ROTATIONS = ["-0.8deg", "0.6deg", "-0.4deg"];
 // requests and live trips already are.
 const BOARD_POLL_MS = 8000;
 
-const TABS = ["home", "find", "offer", "trips", "requests", "profile", "admin", "ops"];
+const TABS = ["home", "find", "offer", "campus", "trips", "requests", "profile", "admin", "ops"];
 
 // Everything an administrator can open. Anything else is a commuter's
 // screen, and a remembered tab from before the privilege was granted
@@ -70,14 +79,6 @@ function rememberedLive() {
   }
 }
 
-function rememberedTab() {
-  try {
-    const stored = localStorage.getItem(TAB_KEY);
-    return TABS.includes(stored) ? stored : "home";
-  } catch {
-    return "home";
-  }
-}
 
 function Logo() {
   return (
@@ -89,7 +90,74 @@ function Logo() {
   );
 }
 
-function Dashboard({ user, onLogout, onUserChange }) {
+function CampusConstellation({ rides = [], onBrowse }) {
+  const routeNames = rides.slice(0, 4).map((ride) => ({
+    id: ride.id,
+    from: ride.pickup || "Campus",
+    to: ride.dropoff || "Somewhere useful",
+  }));
+
+  return (
+    <section className="campus-constellation" aria-label="Campus networking idea">
+      <div className="constellation-copy">
+        <span className="eyebrow">THE CAMPUS WEB</span>
+        <h2>One route can open a whole new circle.</h2>
+        <p>
+          CampusHop is not just about getting from A → B. Your next ride could
+          put you beside someone from another course, another year, or a
+          completely different corner of campus.
+        </p>
+        <div className="constellation-note">
+          <span className="constellation-star">✦</span>
+          <span>Plot twist: your next group-project teammate might be a ride away.</span>
+        </div>
+      </div>
+
+      <div className="constellation-board">
+        <div className="orbit orbit--one" />
+        <div className="orbit orbit--two" />
+        <div className="constellation-center">
+          <span>HOP</span>
+          <small>together</small>
+        </div>
+
+        <span className="constellation-node node--a">CSE</span>
+        <span className="constellation-node node--b">AIML</span>
+        <span className="constellation-node node--c">ECE</span>
+        <span className="constellation-node node--d">MBA</span>
+        <span className="constellation-node node--e">YOU</span>
+
+        <div className="constellation-route route--a" />
+        <div className="constellation-route route--b" />
+        <div className="constellation-route route--c" />
+        <div className="constellation-route route--d" />
+      </div>
+
+      <div className="constellation-routes">
+        <div className="constellation-routes-head">
+          <span>LIVE BOARD ENERGY</span>
+          <strong>{rides.length} routes floating around campus</strong>
+        </div>
+        <div className="route-marquee">
+          {routeNames.length > 0 ? (
+            routeNames.map((route) => (
+              <span key={route.id}>
+                {route.from} <b>→</b> {route.to}
+              </span>
+            ))
+          ) : (
+            <span>Be the first one to put a route on the board ✦</span>
+          )}
+        </div>
+        <button type="button" className="mini-browse-button" onClick={onBrowse}>
+          Explore the board <span>↗</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ user, onLogout, onUserChange, onAccountDeleted }) {
   // An administrator is campus staff here, not a commuter: they are not
   // looking for a lift, not offering one, and have no trips or requests
   // of their own. Showing them four tabs they will never open is four
@@ -103,15 +171,14 @@ function Dashboard({ user, onLogout, onUserChange }) {
   const hasOps = user?.isPortalAdmin === true;
   const admin = hasConsole || hasOps;
 
-  // Reloading should put you back where you were, not at the top of the
-  // app. Read once, on the way in.
-  const [live, setLive] = useState(() => (admin ? null : rememberedLive()));
+  // Signing in or reloading always lands on the home page. The one
+  // exception is a trip still in progress, which is restored below only
+  // after the server confirms it is active — a completed ride never
+  // comes back on startup.
+  const [live, setLive] = useState(null);
   const [activeTab, setActiveTab] = useState(() => {
-    // Whichever they actually have. The operations view first, since it
-    // is the overview; the console is the one with the levers.
     if (admin) return hasOps ? "ops" : "admin";
-
-    return rememberedLive() ? "live" : rememberedTab();
+    return "home";
   });
 
   useEffect(() => {
@@ -141,6 +208,7 @@ function Dashboard({ user, onLogout, onUserChange }) {
     }
 
     if (activeTab === "admin" || activeTab === "ops") setActiveTab("home");
+    if (activeTab === "settings") setActiveTab("profile");
 
     return undefined;
   }, [activeTab, admin, hasOps, hasConsole]);
@@ -154,6 +222,41 @@ function Dashboard({ user, onLogout, onUserChange }) {
     }
   }, [live]);
 
+  // A remembered live ride is useful across a browser restart only while
+  // the trip is genuinely active. Completed/cancelled trips are cleared so
+  // a restart shows the current Home/last page instead of yesterday's map.
+  useEffect(() => {
+    if (admin || live) return undefined;
+    const remembered = rememberedLive();
+    if (!remembered?.rideId) return undefined;
+
+    let cancelled = false;
+    Promise.all([
+      api.rides.get(remembered.rideId),
+      remembered.requestId ? api.requests.status(remembered.requestId) : null,
+    ])
+      .then(([ride, request]) => {
+        if (cancelled) return;
+        const status = ride?.tripStatus || ride?.trip_status;
+        // A cancelled seat is as over as a completed trip.
+        const requestOver = request && request.status !== "accepted";
+        if (["completed", "cancelled", "canceled"].includes(status) || requestOver) {
+          try { localStorage.removeItem(LIVE_KEY); } catch {}
+          return;
+        }
+        if (remembered.requestId) {
+          setLive(remembered);
+          setActiveTab("live");
+        }
+      })
+      .catch(() => {
+        // If the old live trip can no longer be read, don't resurrect it.
+        try { localStorage.removeItem(LIVE_KEY); } catch {}
+      });
+
+    return () => { cancelled = true; };
+  }, [admin, live]);
+
   /** Open the live map for a ride — from an accept, or from My Trips. */
   const openLive = (rideId, role, withName, requestId) => {
     setLive({ rideId, role, withName, requestId });
@@ -164,6 +267,20 @@ function Dashboard({ user, onLogout, onUserChange }) {
     // Back to wherever the trip was opened from.
     setActiveTab(live?.role === "driver" ? "requests" : "trips");
     setLive(null);
+  };
+
+  const forgetLiveRide = useCallback(() => {
+    try {
+      localStorage.removeItem(LIVE_KEY);
+    } catch {
+      // Storage unavailable — nothing was remembered either.
+    }
+  }, []);
+
+  // A trip that has ended — completed or cancelled — goes back to home.
+  const leaveLiveForHome = () => {
+    setLive(null);
+    setActiveTab("home");
   };
 
   // Requests are polled once here, for the whole dashboard, so a driver
@@ -198,6 +315,30 @@ function Dashboard({ user, onLogout, onUserChange }) {
   };
 
   const [rides, setRides] = useState([]);
+
+  // Campus-wide totals for the badge: km travelled together, rides done.
+  const [campus, setCampus] = useState(null);
+
+  useEffect(() => {
+    if (admin) return undefined;
+
+    let cancelled = false;
+    const loadCampus = () =>
+      api.community
+        .stats()
+        .then((s) => !cancelled && setCampus(s))
+        .catch(() => {
+          // The badge simply shows fewer numbers.
+        });
+
+    loadCampus();
+    const timer = setInterval(loadCampus, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [admin]);
 
   // Seeds the Find-a-ride search when someone starts from the dashboard.
   const [search, setSearch] = useState({ from: null, to: null, arriveBy: "08:30" });
@@ -291,6 +432,126 @@ function Dashboard({ user, onLogout, onUserChange }) {
 
   const pendingCount = incoming.requests.filter((r) => r.status === "pending").length;
 
+  // --- "your ride was cancelled / completed", wherever you are ---------
+  //
+  // The live screen tells both people itself. This covers the person who
+  // is on some other page when the other side cancels, or when the driver
+  // finishes the trip, so nobody is left waiting for a ride that is over.
+  const [rideNotice, setRideNotice] = useState(null);
+  const lastTripStatus = useRef(new Map());
+
+  const openLiveRequestId = activeTab === "live" ? live?.requestId : null;
+  const waitingTripId = waitingOn?.tripId ?? null;
+
+  const raiseNotice = useCallback((key, notice) => {
+    if (noticeSeen(key)) return false;
+    markNoticeSeen(key);
+    setRideNotice(notice);
+    return true;
+  }, []);
+
+  // Driver side: a rider cancelling shows up on the incoming list.
+  useEffect(() => {
+    if (admin || rideNotice) return;
+
+    for (const r of incoming.requests) {
+      if (r.status !== "cancelled_by_rider" || r.id === openLiveRequestId) continue;
+
+      const raised = raiseNotice(cancelKey(r.id), {
+        kind: "cancelled",
+        message:
+          `${r.riderName || "Your rider"} cancelled the ride` +
+          (r.ride?.pickup ? ` from ${r.ride.pickup}` : "") +
+          ".",
+      });
+
+      if (raised) return;
+    }
+  }, [admin, incoming.requests, rideNotice, openLiveRequestId, raiseNotice]);
+
+  // Rider side: the driver cancelling, or finishing the trip.
+  useEffect(() => {
+    if (admin || rideNotice) return undefined;
+
+    let cancelled = false;
+
+    const check = async () => {
+      try {
+        const trips = await api.requests.mine();
+
+        if (cancelled) return;
+
+        for (const t of trips) {
+          const previous = lastTripStatus.current.get(t.tripId);
+          lastTripStatus.current.set(t.tripId, t.tripStatus);
+
+          if (t.tripId === openLiveRequestId || t.tripId === waitingTripId) continue;
+
+          if (t.status === "cancelled_by_driver") {
+            const raised = raiseNotice(cancelKey(t.tripId), {
+              kind: "cancelled",
+              message:
+                `${t.person || "Your driver"} cancelled the ride` +
+                (t.pickup ? ` from ${t.pickup}` : "") +
+                ".",
+            });
+
+            if (raised) return;
+          }
+
+          // Only a trip seen finishing during this visit — not every
+          // completed trip in the history the first time the list loads.
+          if (
+            t.status === "accepted" &&
+            t.tripStatus === "completed" &&
+            previous &&
+            previous !== "completed"
+          ) {
+            const raised = raiseNotice(completeKey(t.tripId), {
+              kind: "completed",
+              message: `${t.person || "Your driver"} marked your ride to ${t.dropoff || "your destination"} as completed.`,
+            });
+
+            if (raised) return;
+          }
+        }
+      } catch {
+        // A missed poll is not news.
+      }
+    };
+
+    check();
+
+    const timer = setInterval(check, BOARD_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [admin, rideNotice, openLiveRequestId, waitingTripId, raiseNotice]);
+
+  const cancelAsDriver = async (request) => {
+    const who = request.riderName || "Your rider";
+
+    if (!window.confirm(`Cancel this ride? ${who} will be told it has been cancelled.`)) {
+      return;
+    }
+
+    try {
+      await api.requests.cancel(request.id);
+      markNoticeSeen(cancelKey(request.id));
+      setRideNotice({
+        kind: "cancelled",
+        message: `You cancelled the ride. ${who} has been told.`,
+      });
+    } catch (err) {
+      setRidesError(err.message);
+    } finally {
+      loadRides();
+      incoming.refresh(true);
+    }
+  };
+
   const requestRide = async (ride) => {
     if (pendingRideId) return;
 
@@ -323,6 +584,24 @@ function Dashboard({ user, onLogout, onUserChange }) {
 
   return (
     <div className="dashboard">
+      {rideNotice && (
+        <RideOutcome
+          kind={rideNotice.kind}
+          title={rideNotice.title}
+          message={rideNotice.message}
+          // A completed ride is only a message; a cancelled one goes home.
+          redirect={rideNotice.kind !== "completed"}
+          onDone={() => {
+            setRideNotice(null);
+            loadRides();
+            incoming.refresh(true);
+            if (rideNotice.kind === "completed") return;
+            setLive(null);
+            setActiveTab("home");
+          }}
+        />
+      )}
+
       {waitingOn && (
         <RequestWaiting
           rideId={waitingOn.rideId}
@@ -362,106 +641,62 @@ function Dashboard({ user, onLogout, onUserChange }) {
         }
       />
 
-      <header className="topbar">
+      <aside className="app-sidebar">
         <button
-          className="logo-button"
-          onClick={() =>
-            setActiveTab(admin ? (hasOps ? "ops" : "admin") : "home")
-          }
+          className="sidebar-brand"
+          onClick={() => setActiveTab(admin ? (hasOps ? "ops" : "admin") : "home")}
+          aria-label="Go to Home"
         >
           <Logo />
         </button>
 
-        <nav className="main-nav">
-          {/* The commuter's four tabs. An administrator sees none of them;
-              see the note at the top of this component. */}
+        <div className="sidebar-status">
+          <span className="sidebar-status-dot" />
+          <div>
+            <strong>Campus is moving</strong>
+            <span>{rides.length} live hops on the board</span>
+            {campus?.kmTravelled > 0 && (
+              <span className="sidebar-status-km">
+                {bigNumber(campus.kmTravelled)} km shared · {bigNumber(campus.ridesCompleted)} rides
+              </span>
+            )}
+          </div>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {!admin && (
             <>
-              <button
-                className={activeTab === "find" ? "active" : ""}
-                onClick={() => setActiveTab("find")}
-              >
-                Find a ride
-              </button>
-
-              <button
-                className={activeTab === "offer" ? "active" : ""}
-                onClick={() => setActiveTab("offer")}
-              >
-                Offer a ride
-              </button>
-
-              <button
-                className={activeTab === "trips" ? "active" : ""}
-                onClick={() => setActiveTab("trips")}
-              >
-                My trips
-              </button>
-
-              <button
-                className={activeTab === "requests" ? "active" : ""}
-                onClick={() => setActiveTab("requests")}
-              >
-                Requests
-                {pendingCount > 0 && (
-                  <span className="nav-badge">{pendingCount}</span>
-                )}
-              </button>
+              <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span>⌂</span>Home</button>
+              <button className={activeTab === "find" ? "active" : ""} onClick={() => setActiveTab("find")}><span>↗</span>Find a ride</button>
+              <button className={activeTab === "offer" ? "active" : ""} onClick={() => setActiveTab("offer")}><span>＋</span>Offer a ride</button>
+              <button className={activeTab === "campus" ? "active" : ""} onClick={() => setActiveTab("campus")}><span>✦</span>Campus</button>
+              <button className={activeTab === "trips" ? "active" : ""} onClick={() => setActiveTab("trips")}><span>▣</span>My trips</button>
+              <button className={activeTab === "requests" ? "active" : ""} onClick={() => setActiveTab("requests")}><span>♡</span>Requests{pendingCount > 0 && <b className="sidebar-badge">{pendingCount}</b>}</button>
             </>
           )}
-
-          {/* Hidden from everybody else, which is a courtesy and not the
-              boundary: /api/admin is gated by requireAdmin on the server
-              and answers 404 to a caller without the privilege. Someone
-              who edits this condition in their own browser gets a tab
-              whose every request comes back empty. */}
-          {/* One entry per privilege held. Somebody with both gets two
-              tabs; somebody with one gets one and never sees the other
-              exists. */}
-          {hasOps && (
-            <button
-              className={activeTab === "ops" ? "active" : ""}
-              onClick={() => setActiveTab("ops")}
-            >
-              Operations
-            </button>
-          )}
-
-          {hasConsole && (
-            <button
-              className={activeTab === "admin" ? "active" : ""}
-              onClick={() => setActiveTab("admin")}
-            >
-              Console
-            </button>
-          )}
+          {hasOps && <button className={activeTab === "ops" ? "active" : ""} onClick={() => setActiveTab("ops")}><span>◈</span>Operations</button>}
+          {hasConsole && <button className={activeTab === "admin" ? "active" : ""} onClick={() => setActiveTab("admin")}><span>⚙</span>Admin console</button>}
         </nav>
 
-        <div className="profile-menu">
-          <button
-            type="button"
-            className={`profile-button ${activeTab === "profile" ? "active" : ""}`}
-            onClick={() => setActiveTab("profile")}
-            title="Your profile"
-          >
-            <div className="mini-avatar">
-              {user?.name?.slice(0, 2).toUpperCase() || "YO"}
-            </div>
+        <div className="sidebar-spacer" />
 
-            <div>
-              <strong>{user?.name || "You"}</strong>
-              <span>{user?.role || "Student"}</span>
-            </div>
-
-            {/* A profile with gaps is worth flagging where it is fixed. */}
-            {needsDetails(user) && <span className="profile-dot" aria-label="Details missing" />}
+        <div className="sidebar-profile">
+          <button type="button" className={`sidebar-profile-button ${activeTab === "profile" ? "active" : ""}`} onClick={() => setActiveTab("profile")}>
+            <div className="sidebar-avatar">{user?.name?.slice(0, 2).toUpperCase() || "YO"}</div>
+            <div><strong>{user?.name || "You"}</strong><span>{user?.course || user?.role || "Campus member"}</span></div>
+            {needsDetails(user) && <i className="profile-dot" aria-label="Details missing" />}
           </button>
-
-          <button className="logout-button" onClick={onLogout}>
-            Logout
-          </button>
+          <button className="sidebar-logout" onClick={onLogout}><span>↪</span>Logout</button>
         </div>
-      </header>
+      </aside>
+
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        {!admin && <button className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><span>⌂</span>Home</button>}
+        {!admin && <button className={activeTab === "find" ? "active" : ""} onClick={() => setActiveTab("find")}><span>↗</span>Find</button>}
+        {!admin && <button className="mobile-nav-main" onClick={() => setActiveTab("offer")}><span>＋</span>Hop</button>}
+        {!admin && <button className={activeTab === "campus" ? "active" : ""} onClick={() => setActiveTab("campus")}><span>✦</span>Campus</button>}
+        <button className={activeTab === "profile" ? "active" : ""} onClick={() => setActiveTab("profile")}><span>●</span>You</button>
+      </nav>
 
       <main className="dashboard-content">
 
@@ -473,146 +708,19 @@ function Dashboard({ user, onLogout, onUserChange }) {
   )}
 
   {activeTab === "home" && (
-    <>
-      <section className="welcome-row">
-          <div>
-            <span className="eyebrow">MONDAY · AUGUST 24</span>
-            <h1>
-              Good evening,
-              <br />
-              <em>{user?.name?.split(" ")[0] || "rider"}.</em>
-            </h1>
-          </div>
-
-          <div className="campus-status">
-            <span className="status-dot" />
-            <div>
-              <strong>Campus network</strong>
-              <span>Verified & active</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="commute-panel">
-          <div className="commute-copy">
-            <span className="eyebrow">YOUR MORNING COMMUTE</span>
-            <h2>Where are you headed?</h2>
-            <p>
-              Tell us your route and we'll find people already going your way.
-            </p>
-          </div>
-
-          <div className="commute-form commute-form--live">
-            <AddressInput
-              label="From"
-              name="home-from"
-              placeholder={user?.pickupPoint || "e.g. BTM Layout"}
-              value={search.from}
-              onChange={(place) =>
-                setSearch((prev) => ({ ...prev, from: place }))
-              }
-            />
-
-            <AddressInput
-              label="To"
-              name="home-to"
-              placeholder="e.g. BMS College of Engineering"
-              value={search.to}
-              onChange={(place) => setSearch((prev) => ({ ...prev, to: place }))}
-            />
-
-            <label className="search-field">
-              Arrive by
-              <input
-                type="time"
-                value={search.arriveBy}
-                onChange={(e) =>
-                  setSearch((prev) => ({ ...prev, arriveBy: e.target.value }))
-                }
-              />
-            </label>
-
-            <button
-              className="find-button"
-              onClick={() => setActiveTab("find")}
-              disabled={!search.from || !search.to}
-            >
-              Find matches
-              <span>↗</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="matches-header">
-          <div>
-            <span className="eyebrow">ROUTE BOARD</span>
-            <h2>People heading your way.</h2>
-          </div>
-
-          <div className="match-explanation">
-            <div className="tiny-score">{rides.length}</div>
-            <span>
-              routes posted.
-              <br />
-              Search above to rank them.
-            </span>
-          </div>
-        </section>
-
-        <section className="ride-board">
-          <div className="board-scribble">
-            <span>best matches</span>
-            <div>↘</div>
-          </div>
-
-          {rides.map((ride) => (
-            <RideCard
-              key={ride.id}
-              ride={ride}
-              onRequest={requestRide}
-              pending={pendingRideId === ride.id}
-            />
-          ))}
-        </section>
-
-        <section className="score-breakdown">
-          <div>
-            <span className="eyebrow">HOW WE SCORE</span>
-            <h2>Not magic. Just useful.</h2>
-            <p>
-              Every match is explainable. We compare the things that actually
-              matter when sharing a commute.
-            </p>
-          </div>
-
-          <div className="score-factors">
-            <div>
-              <strong>35%</strong>
-              <span>Route</span>
-            </div>
-
-            <div>
-              <strong>25%</strong>
-              <span>Time</span>
-            </div>
-
-            <div>
-              <strong>20%</strong>
-              <span>Pickup</span>
-            </div>
-
-            <div>
-              <strong>15%</strong>
-              <span>Reliability</span>
-            </div>
-
-            <div>
-              <strong>5%</strong>
-              <span>Vehicle</span>
-            </div>
-          </div>
-                </section>
-    </>
+    <HomePage
+      user={user}
+      rides={rides}
+      search={search}
+      setSearch={setSearch}
+      onFind={() => setActiveTab("find")}
+      onOffer={() => setActiveTab("offer")}
+      onCampus={() => setActiveTab("campus")}
+      onTrips={() => setActiveTab("trips")}
+      onRequest={requestRide}
+      pendingRideId={pendingRideId}
+      campus={campus}
+    />
   )}
 
   {activeTab === "find" && (
@@ -628,6 +736,8 @@ function Dashboard({ user, onLogout, onUserChange }) {
   <OfferRide onPostRide={addRide} />
 )}
 
+{activeTab === "campus" && <CommunityPage campus={campus} />}
+
 {activeTab === "trips" && (
   <MyTrips
     onViewTrip={(trip) => {
@@ -635,6 +745,15 @@ function Dashboard({ user, onLogout, onUserChange }) {
       setActiveTab("rideDetails");
     }}
     onTrackTrip={(trip) => openLive(trip.rideId, "rider", trip.person, trip.tripId)}
+    onCancelled={(trip) => {
+      markNoticeSeen(cancelKey(trip.tripId));
+      loadRides();
+      setRideNotice({
+        kind: "cancelled",
+        title: trip.status === "accepted" ? undefined : "Your request has been cancelled",
+        message: `You cancelled the ${trip.status === "accepted" ? "ride" : "request"}. ${trip.person || "The driver"} has been told.`,
+      });
+    }}
   />
 )}
 
@@ -659,6 +778,7 @@ function Dashboard({ user, onLogout, onUserChange }) {
     onOpenLive={(request) =>
       openLive(request.ride?.id, "driver", request.riderName, request.id)
     }
+    onCancel={cancelAsDriver}
     nearby={
       // The same board the Find tab uses, and the same request flow: asking
       // from here opens the same waiting screen as asking from there.
@@ -673,9 +793,10 @@ function Dashboard({ user, onLogout, onUserChange }) {
 )}
 
 {activeTab === "profile" && (
-  <ProfilePage
+  <SettingsPage
     user={user}
     onSave={async (details) => onUserChange(await api.profile.update(details))}
+    onDeleted={onAccountDeleted}
   />
 )}
 
@@ -716,8 +837,15 @@ function Dashboard({ user, onLogout, onUserChange }) {
       // stale. Refresh them on the way out.
       loadRides();
       incoming.refresh(true);
-      closeLive();
+      leaveLiveForHome();
     }}
+    onFinished={() => {
+      loadRides();
+      incoming.refresh(true);
+      leaveLiveForHome();
+    }}
+    // The trip is over: nothing to restore on a reload or the next sign-in.
+    onCompleted={forgetLiveRide}
   />
 )}
 
@@ -740,17 +868,24 @@ export default function App() {
   // does not type it again.
   const [resetEmail, setResetEmail] = useState("");
 
-  // Supabase keeps the session in local storage, so a reload still has a
-  // valid token — but this component used to start from a blank `user`
-  // and drop straight back to the landing page. Restoring it here is what
-  // makes a refresh keep you signed in.
-  //
-  // `booting` holds the first paint until we know: without it the landing
-  // page flashes for a moment before the dashboard replaces it.
+  // { email, name?, role? } between signing up and entering the code.
+  const [pendingSignup, setPendingSignup] = useState(null);
+
+  // Keep the first paint behind a tiny auth gate. In development we
+  // intentionally start from a clean sign-in every time Vite boots: this
+  // prevents an old Supabase session or a remembered live ride/tab from
+  // dropping straight into a previous user's screen while developing.
+  // Production keeps the normal Supabase session restore behaviour.
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+
+    // Restarting the dev server is not a logout. Supabase already persists
+    // the session, so restore it normally and let the dashboard fetch fresh
+    // data. This also prevents a completed ride from reappearing because
+    // the remembered live ride is validated inside Dashboard.
+
 
     const restore = async () => {
       // A reset link arrives as #access_token=...&type=recovery. Supabase
@@ -839,8 +974,16 @@ export default function App() {
     setPage("dashboard");
   };
 
-  const register = (data) => {
-    setUser(data);
+  // Signed up, but not yet verified: no session exists until the code
+  // Supabase emailed comes back.
+  const register = (pending) => {
+    setPendingSignup(pending);
+    setPage("verifyEmail");
+  };
+
+  const verified = (profile) => {
+    setPendingSignup(null);
+    setUser(profile);
     setPage("profileSetup");
   };
 
@@ -886,7 +1029,27 @@ export default function App() {
           setNotice("");
           setPage("forgotPassword");
         }}
+        onVerify={(email) => {
+          setNotice("");
+          setPendingSignup({ email });
+          setPage("verifyEmail");
+        }}
         notice={notice}
+      />
+    );
+  }
+
+  if (page === "verifyEmail" && pendingSignup) {
+    return (
+      <VerifyEmail
+        email={pendingSignup.email}
+        name={pendingSignup.name}
+        role={pendingSignup.role}
+        onVerified={verified}
+        onBack={() => {
+          setPendingSignup(null);
+          setPage("login");
+        }}
       />
     );
   }
@@ -896,6 +1059,7 @@ export default function App() {
       <ForgotPassword
         email={resetEmail}
         onBack={() => setPage("login")}
+        onVerified={() => setPage("resetPassword")}
       />
     );
   }
@@ -937,6 +1101,13 @@ export default function App() {
         await supabase.auth.signOut();
         setUser(null);
         setNotice("");
+        setPage("login");
+      }}
+      onAccountDeleted={async () => {
+        // The auth user is already gone; this only clears the local copy.
+        await supabase.auth.signOut().catch(() => {});
+        setUser(null);
+        setNotice("Your account has been deleted.");
         setPage("login");
       }}
     />

@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { ratingsFor } = require("../ratings");
+const { statsFor, countCompletedTrip } = require("../memberStats");
 const { computeRoute } = require("../geo");
 const { rankRides, withProximity, minutesOfDay } = require("../match");
 const { fareDetail } = require("../pricing");
@@ -128,12 +129,17 @@ function toRide(row, completedByDriver = {}, context = {}) {
     rating: context.ratings?.[row.driver_id]?.average ?? null,
     ratingCount: context.ratings?.[row.driver_id]?.count ?? 0,
 
+    // The driver's track record, so a rider can see who they are getting in with.
+    driverStats: context.stats?.[row.driver_id] ?? null,
+
     createdAt: row.created_at,
 
     // The plate a rider will be looking for at the kerb, and the driver's
     // real role rather than the "Student" this used to hardcode.
     vehicleNumber: driver?.vehicle_number ?? null,
     driverRole: driver?.role ?? null,
+    course: driver?.course ?? null,
+    vibe: row.vibe ?? null,
 
     // A phone number is shared, never published. It is released only to
     // the driver themselves and to a rider they have actually accepted —
@@ -180,7 +186,7 @@ async function callerContext(rows, userId) {
       .select("ride_id")
       .eq("status", "accepted")
       .in("ride_id", ids),
-    db.from("profiles").select("id, role, vehicle_number, phone").in("id", driverIds),
+    db.from("profiles").select("id, role, vehicle_number, phone, course").in("id", driverIds),
   ]);
 
   const myRequests = {};
@@ -248,16 +254,17 @@ router.get("/", async (req, res, next) => {
   try {
     const rows = await fetchUpcomingRides();
 
-    const [counts, context, ratings] = await Promise.all([
+    const [counts, context, ratings, stats] = await Promise.all([
       completedCounts(rows),
       callerContext(rows, req.user.id),
 
       // One query for every driver on the board, not one per card.
       ratingsFor(rows.map((r) => r.driver_id)),
+      statsFor(rows.map((r) => r.driver_id)),
     ]);
 
     const rides = rows.map((row) =>
-      toRide(row, counts, { ...context, ratings })
+      toRide(row, counts, { ...context, ratings, stats })
     );
 
     const q = req.query;
@@ -312,13 +319,14 @@ router.get("/:id", async (req, res, next) => {
     if (error) throw error;
     if (!data) return res.status(404).json({ error: "Ride not found." });
 
-    const [counts, context, ratings] = await Promise.all([
+    const [counts, context, ratings, stats] = await Promise.all([
       completedCounts([data]),
       callerContext([data], req.user.id),
       ratingsFor([data.driver_id]),
+      statsFor([data.driver_id]),
     ]);
 
-    res.json({ ride: toRide(data, counts, { ...context, ratings }) });
+    res.json({ ride: toRide(data, counts, { ...context, ratings, stats }) });
   } catch (err) {
     next(err);
   }
@@ -333,7 +341,7 @@ router.get("/:id", async (req, res, next) => {
  */
 router.post("/", async (req, res, next) => {
   try {
-    const { pickup, dropoff, date, time, seats, vehicle } = req.body || {};
+    const { pickup, dropoff, date, time, seats, vehicle, vibe } = req.body || {};
 
     const missing = [];
     if (!pickup?.label || pickup.lat == null || pickup.lng == null) missing.push("pickup");
@@ -403,12 +411,25 @@ router.post("/", async (req, res, next) => {
         date,
         time,
         vehicle: vehicle || "car",
+        vibe: vibe && ["music", "chatty", "quiet", "study", "chai"].includes(vibe) ? vibe : null,
         seats: seatCount,
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === "PGRST204" || error.code === "PGRST205" || error.code === "42703") {
+        const missing = /column ['"]([^'"]+)['"]/i.exec(error.message || "")?.[1];
+        const migration = missing === "vibe" ? "013_campus_social.sql"
+          : missing === "pickup_lat" || missing === "route_geometry" ? "001_add_route_columns.sql"
+          : missing === "departs_at" ? "008_ride_expiry.sql"
+          : "FULL_CAMPUSHOP_SETUP.sql";
+        return res.status(503).json({
+          error: `The ride database is missing ${missing ? `the ${missing} field` : "a required field"}. Run ${migration} in Supabase, then retry.`,
+        });
+      }
+      throw error;
+    }
 
     res.status(201).json({ ride: toRide(data, {}, { userId: req.user.id }) });
   } catch (err) {
@@ -572,6 +593,13 @@ router.post("/:id/trip", async (req, res, next) => {
       .single();
 
     if (error) throw error;
+
+    // Counted into everyone's lifetime stats and the campus totals, once.
+    if (data.trip_status === "completed") {
+      await countCompletedTrip(req.params.id).catch((err) =>
+        console.error("Counting completed trip failed:", err.message)
+      );
+    }
 
     res.json({ tripStatus: data.trip_status });
   } catch (err) {

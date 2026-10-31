@@ -3,8 +3,10 @@ import { api } from "./lib/api";
 import ReportTrip from "./ReportTrip";
 import Stars from "./Stars";
 import { formatFare, fareNote } from "./lib/fare";
+import TripChat from "./TripChat";
+import { statusLabel } from "./lib/rideNotices";
 
-export default function MyTrips({ onViewTrip, onTrackTrip }) {
+export default function MyTrips({ onViewTrip, onTrackTrip, onCancelled }) {
   // The trip a report is being written about, or null.
   const [reporting, setReporting] = useState(null);
 
@@ -13,6 +15,7 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(null);
+  const [chatTrip, setChatTrip] = useState(null);
 
   useEffect(() => {
     loadTrips();
@@ -43,18 +46,24 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
   };
 
   /**
-   * Call off a seat, requested or accepted.
-   *
-   * The row is removed rather than marked cancelled, so the seat goes
-   * back on the board and this rider is free to ask again later.
+   * Call off a seat, requested or accepted, at any time until the trip is
+   * completed. The seat goes back on the board, the driver is told, and
+   * this rider is free to ask again later.
    */
   const cancelTrip = async (trip) => {
     if (cancelling) return;
+
+    const what = trip.status === "accepted" ? "ride" : "request";
+
+    if (!window.confirm(`Cancel this ${what}? ${trip.person || "The driver"} will be told it has been cancelled.`)) {
+      return;
+    }
 
     setCancelling(trip.tripId);
 
     try {
       await api.requests.cancel(trip.tripId);
+      onCancelled?.(trip);
       await loadTrips(true);
     } catch (err) {
       setError(err.message);
@@ -75,10 +84,18 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
     trip.state || (trip.status === "declined" ? "declined" : "upcoming");
 
   const upcoming = trips.filter((t) => ["live", "upcoming"].includes(state(t)));
-  const history = trips.filter((t) => ["finished", "declined"].includes(state(t)));
+  const history = trips.filter((t) => ["finished", "cancelled", "declined"].includes(state(t)));
 
   // The one trip that is actually under way, if there is one.
   const liveTrip = trips.find((t) => state(t) === "live") || null;
+
+  useEffect(() => {
+    if (!chatTrip) return;
+    const current = trips.find((t) => t.tripId === chatTrip.tripId);
+    if (current?.tripStatus === "completed") {
+      setChatTrip(null);
+    }
+  }, [trips, chatTrip]);
 
   const reportModal = reporting ? (
     <ReportTrip
@@ -92,6 +109,14 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
   return (
     <>
       {reportModal}
+      {chatTrip && (
+        <div className="chat-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setChatTrip(null); }}>
+          <div className="chat-modal-card">
+            <button type="button" className="chat-modal-close" onClick={() => setChatTrip(null)} aria-label="Close messages">×</button>
+            <TripChat tripId={chatTrip.tripId} withName={chatTrip.person} />
+          </div>
+        </div>
+      )}
       <main className="page-shell">
 
       <section className="page-heading">
@@ -237,7 +262,7 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                 </div>
 
                 <span className={`status-badge status-${trip.status}`}>
-                  {trip.status}
+                  {statusLabel(trip.status)}
                 </span>
 
                 {/* What this seat costs, on the trip it belongs to — the
@@ -277,6 +302,15 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                     </button>
                   )}
 
+                  {trip.status === "accepted" && trip.tripStatus !== "completed" && (
+                    <button
+                      className="secondary-button trip-message-button"
+                      onClick={() => setChatTrip(trip)}
+                    >
+                      💬 Message {trip.person}
+                    </button>
+                  )}
+
                   {trip.status === "accepted" && trip.phone && (
                     <a className="secondary-button" href={`tel:${trip.phone}`}>
                       ☎ Call driver
@@ -295,13 +329,22 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                     </button>
                   )}
 
-                  <button
-                    className="danger-button"
-                    disabled={cancelling === trip.tripId}
-                    onClick={() => cancelTrip(trip)}
-                  >
-                    {cancelling === trip.tripId ? "Cancelling…" : "Cancel"}
-                  </button>
+                  {/* The rider can call it off at any time until the trip
+                      is completed — a request still waiting, or a ride the
+                      driver already accepted. The driver is told. */}
+                  {trip.tripStatus !== "completed" && (
+                    <button
+                      className="danger-button"
+                      disabled={cancelling === trip.tripId}
+                      onClick={() => cancelTrip(trip)}
+                    >
+                      {cancelling === trip.tripId
+                        ? "Cancelling…"
+                        : trip.status === "accepted"
+                          ? "Cancel ride"
+                          : "Cancel request"}
+                    </button>
+                  )}
                 </div>
 
               </article>
@@ -360,7 +403,7 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                   </div>
                 )}
                 <span className={`status-badge status-${trip.status}`}>
-                  {trip.status}
+                  {statusLabel(trip.status)}
                 </span>
 
                 {/* What this seat costs, on the trip it belongs to — the
@@ -410,6 +453,15 @@ export default function MyTrips({ onViewTrip, onTrackTrip }) {
                         onClick={() => onTrackTrip(trip)}
                       >
                         {trip.myRating == null ? "Rate this trip →" : "Trip summary →"}
+                      </button>
+                    )}
+
+                    {trip.tripStatus !== "completed" && (
+                      <button
+                        className="secondary-button"
+                        onClick={() => setChatTrip(trip)}
+                      >
+                        💬 Messages
                       </button>
                     )}
 
